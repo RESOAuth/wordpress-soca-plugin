@@ -46,3 +46,14 @@ wp-config.php
 # Note: If you wish to whitelist themes,
 # uncomment the next line
 #/wp-content/themes
+
+# Local development and release outputs
+/dist/
+/work/
+/outputs/
+.env
+.env.*
+!.env.example
+node_modules/
+__pycache__/
+*.pyc

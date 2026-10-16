@@ -1,0 +1,89 @@
+<?php
+// Run only against a disposable installation: wp eval-file tests/wordpress.php
+require __DIR__ . '/bootstrap.php';
+use OCIMD\{Settings,Support,Store,Keys,Identity,Policy,Metadata,Plugin};
+Support::need(wp_get_environment_type()==='local','test_environment','Tests require WP_ENVIRONMENT_TYPE=local.');
+$before=Settings::get();$created=[];
+$make=function($name,$email,$role='subscriber')use(&$created){$id=wp_insert_user(['user_login'=>$name,'user_pass'=>'Test-only-password!','user_email'=>$email,'role'=>$role]);expect(!is_wp_error($id),is_wp_error($id)?$id->get_error_message():'');$created[]=$id;return (int)$id;};
+$s=$before;$s['allow_domains']=['company.com'];$s['allow_emails']=[];$s['deny_domains']=[];$s['deny_emails']=[];$s['unrestricted']=false;$s['create_users']=false;
+$c=['iss'=>'https://fixture.company.com','sub'=>'wp-test-1','email'=>'ordinary@company.com','email_verified'=>true];
+try {
+    test('localhost defaults keep login off and infer no domain',function(){
+        $home=get_option('home'); update_option('home','https://localhost:8443');
+        try { $local=Settings::defaults(); expect(!$local['enabled'] && $local['mode']==='proxy' && $local['key_mode']==='inline' && $local['allow_domains']===[] && !$local['unrestricted']); }
+        finally { update_option('home',$home); }
+    });
+    test('allow-any save preserves hidden allowlists while deny rules still win',function()use($before){
+        $input=$before;
+        foreach (['allow_domains','allow_emails','deny_domains','deny_emails'] as $key) { $input[$key]=implode("\n",$before[$key]); }
+        unset($input['allow_domains'],$input['allow_emails']);
+        $input['unrestricted']='1'; $input['deny_domains']='blocked.company.com';
+        try {
+            $saved=Settings::save($input);
+            expect($saved['allow_domains']===$before['allow_domains'] && $saved['unrestricted']);
+            expect(Policy::test($saved,'person@other.com',true)[0]);
+            expect(!Policy::test($saved,'person@blocked.company.com',true)[0]);
+        } finally { update_option('ocimd_settings',$before,false); }
+    });
+    test('WordPress tables installed and keys encrypted without autoload',function(){global $wpdb;expect((int)get_option('ocimd_schema')===1);expect(count(Keys::get()['items'])===2);$row=$wpdb->get_row("SELECT option_value,autoload FROM {$wpdb->options} WHERE option_name='ocimd_keys'",ARRAY_A);expect(!str_contains($row['option_value'],'PRIVATE KEY'));expect(in_array($row['autoload'],['off','no','auto-off'],true));});
+    test('new callback hook is registered and profile identity controls are absent',function(){
+        expect(plugin_basename(OCIMD_FILE)==='simple-oauth-cimd-access/simple-oauth-cimd-access.php');
+        expect(function_exists('soca_button'));
+        expect(has_action('admin_post_nopriv_soca_start',[Plugin::class,'start'])!==false);
+        expect(has_action('admin_post_nopriv_soca_callback',[Plugin::class,'callback'])!==false);
+        expect(has_action('admin_post_nopriv_oauthcimd_callback')===false);
+        expect(has_action('show_user_profile',[\OCIMD\Admin::class,'profile'])===false);
+    });
+    test('browser binding, single-use and encrypted transactions',function(){
+        global $wpdb;$state=Support::random();$b=Support::random();Store::createTransaction($state,['browser'=>hash('sha256',$b),'verifier'=>'confidential-verifier']);
+        $raw=$wpdb->get_var($wpdb->prepare("SELECT payload FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state)));expect(!str_contains($raw,'confidential-verifier'));
+        rejects(fn()=>Store::consumeTransaction($state,'other'),'browser');expect(Store::consumeTransaction($state,$b)['verifier']==='confidential-verifier');rejects(fn()=>Store::consumeTransaction($state,$b),'state');
+        $state=Support::random();Store::createTransaction($state,['browser'=>hash('sha256',$b)]);$wpdb->update($wpdb->prefix.'ocimd_transactions',['expires'=>time()-1],['id'=>hash('sha256',$state)]);rejects(fn()=>Store::consumeTransaction($state,$b),'state');Store::clean();expect(!$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state))));
+    });
+    $ordinary=$make('ocimd-test-ordinary','ordinary@company.com');$admin=$make('ocimd-test-admin','privileged@company.com','administrator');
+    test('access-rule test keeps its explanation beside the form',function()use($admin){
+        $settings=Settings::get(); $originalUser=get_current_user_id(); $originalPost=$_POST; $originalRequest=$_REQUEST; $originalMethod=$_SERVER['REQUEST_METHOD']??null; $bufferLevel=ob_get_level();
+        try {
+            $configured=$settings; $configured['allow_domains']=['company.com']; $configured['allow_emails']=[]; $configured['deny_domains']=[]; $configured['deny_emails']=[]; $configured['unrestricted']=false;
+            update_option('ocimd_settings',$configured,false); wp_set_current_user($admin);
+            $_SERVER['REQUEST_METHOD']='POST';
+            $_POST=['operation'=>'policy','test_email'=>'ordinary@company.com','verified'=>'1','_wpnonce'=>wp_create_nonce('ocimd_settings')];
+            $_REQUEST=$_POST;
+            ob_start(); \OCIMD\Admin::page(); $html=ob_get_clean();
+            expect(str_contains($html,'SOCA - Simple OAuth CIMD Access'));
+            expect(str_contains($html,'id="ocimd-access-rules"') && str_contains($html,'href="#ocimd-access-rules"'));
+            expect(str_contains($html,'action="#ocimd-access-test"') && str_contains($html,'value="ordinary@company.com"'));
+            $result=strpos($html,'id="ocimd-policy-result"'); $input=strpos($html,'id="test_email"'); $operations=strpos($html,'<h2>Operations</h2>');
+            expect($result!==false && $input!==false && $operations!==false && $input<$result && $result<$operations);
+            expect(str_contains($html,'Allowed for ordinary@company.com: Exact domain allow rule matches'));
+            $configured['deny_emails']=['ordinary@company.com']; update_option('ocimd_settings',$configured,false);
+            ob_start(); \OCIMD\Admin::page(); $denied=ob_get_clean();
+            expect(str_contains($denied,'Denied for ordinary@company.com: Email deny rule wins'));
+            expect(strpos($denied,'id="ocimd-policy-result"')>strpos($denied,'id="test_email"'));
+        } finally {
+            while (ob_get_level()>$bufferLevel) { ob_end_clean(); }
+            update_option('ocimd_settings',$settings,false); wp_set_current_user($originalUser); $_POST=$originalPost; $_REQUEST=$originalRequest;
+            if ($originalMethod===null) { unset($_SERVER['REQUEST_METHOD']); } else { $_SERVER['REQUEST_METHOD']=$originalMethod; }
+        }
+    });
+    test('verified email links an existing account by default',function()use($c,$s,$ordinary){expect(Identity::resolve($c,$s)->ID===$ordinary);expect(Identity::resolve($c,$s)->ID===$ordinary);});
+    test('identity stays with original user after verified email change',function()use($c,$s,$ordinary){$changed=$c;$changed['email']='changed@company.com';expect(Identity::resolve($changed,$s)->ID===$ordinary);expect(get_userdata($ordinary)->user_email==='ordinary@company.com');});
+    test('pairwise-subject changes cannot silently relink by email',function()use($c,$s){$changed=$c;$changed['sub']='wp-test-changed';rejects(fn()=>Identity::resolve($changed,$s),'silent_relink');});
+    test('verified email also links an administrator by default',function()use($c,$s,$admin){$c['email']='privileged@company.com';$c['sub']='wp-admin-sub';expect(Identity::resolve($c,$s)->ID===$admin);expect(in_array('administrator',get_userdata($admin)->roles,true));});
+    $ordinary2=$make('ocimd-test-ordinary2','ordinary2@company.com');
+    test('verified email matches another ordinary account',function()use($c,$s,$ordinary2){$c['sub']='wp-ordinary2';$c['email']='ordinary2@company.com';expect(Identity::resolve($c,$s)->ID===$ordinary2);});
+    test('registration off; explicit controlled creation is subscriber only',function()use($c,$s,&$created){$c['sub']='wp-new';$c['email']='new@company.com';rejects(fn()=>Identity::resolve($c,$s),'registration_disabled');$s['create_users']=true;$c['role']='administrator';$c['roles']=['administrator'];$u=Identity::resolve($c,$s);$created[]=$u->ID;expect($u->roles===['subscriber']);});
+    test('email_verified must be boolean true and denial still applies to linked identity',function()use($c,$s){$c['email_verified']='true';rejects(fn()=>Identity::resolve($c,$s),'access_denied');$c['email_verified']=true;$s['deny_domains']=['company.com'];rejects(fn()=>Identity::resolve($c,$s),'access_denied');});
+    $dup=$make('ocimd-test-duplicate','temporary@company.com');
+    test('ambiguous local emails rejected',function()use($c,$s,$dup){global $wpdb;$wpdb->update($wpdb->users,['user_email'=>'ordinary2@company.com'],['ID'=>$dup]);$c['email']='ordinary2@company.com';$c['sub']='ambiguous-sub';rejects(fn()=>Identity::resolve($c,$s),'ambiguous_email');});
+    test('existing custom capabilities remain unchanged',function()use($ordinary2,$c,$s){$u=get_userdata($ordinary2);$u->add_cap('edit_posts');$c['sub']='wp-ordinary2';$c['email']='ordinary2@company.com';expect(Identity::resolve($c,$s)->ID===$ordinary2);expect(get_userdata($ordinary2)->has_cap('edit_posts'));$u->remove_cap('edit_posts');});
+    test('unlink is scoped to local user',function()use($ordinary,$admin){$rows=Identity::forUser($ordinary);Identity::unlink($admin,$rows[0]['identity_hash']);expect(count(Identity::forUser($ordinary))===1);Identity::unlink($ordinary,$rows[0]['identity_hash']);expect(count(Identity::forUser($ordinary))===0);});
+    test('redacted audit excludes tokens, email and subjects',function(){Support::audit('login_success',1);$log=Support::json(get_option('ocimd_audit'));expect(!str_contains($log,'@company.com') && !str_contains($log,'wp-test-1') && !str_contains($log,'access_token'));});
+    test('public metadata exposes public keys only and no access policy',function(){ $d=Metadata::document(Settings::get(),true);Metadata::noPrivateKeys($d);$j=Support::json($d);expect(!str_contains($j,'allow_domains') && !str_contains($j,'PRIVATE KEY')); });
+} finally {
+    require_once ABSPATH.'wp-admin/includes/user.php';
+    foreach($created as $id) wp_delete_user($id);
+    update_option('ocimd_settings',$before,false);
+}
+echo ($GLOBALS['passed']??0).' passed, '.($GLOBALS['failed']??0)." failed\n";
+if(!empty($GLOBALS['failed'])) \WP_CLI::halt(1);

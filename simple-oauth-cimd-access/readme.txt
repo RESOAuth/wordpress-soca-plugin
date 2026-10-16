@@ -1,0 +1,40 @@
+=== SOCA - Simple OAuth CIMD Access ===
+Contributors: olliejc
+Tags: openid-connect, oauth, login, cimd, pkce
+Requires at least: 6.8
+Tested up to: 7.1
+Requires PHP: 8.1
+Stable tag: 0.0.1
+License: AGPLv3
+License URI: https://www.gnu.org/licenses/agpl-3.0.html
+
+SOCA (Simple OAuth CIMD Access) is open-source WordPress single sign-on built and supported by RESOAuth®.
+
+== Description ==
+SOCA is an open-source RESOAuth® plugin that also supports other compatible configured providers. OAuth redirects the browser securely; OpenID Connect establishes the user's identity; CIMD publishes this site's client details and public keys.
+
+One configurable OIDC provider per site. Initial settings use RESOAuth. Self-hosted and configurable HTTPS proxy CIMD modes, public JWKS, encrypted P-256 client keys, safe weekly rotation, exact issuer/subject identity binding, verified-email policies and optional controlled Subscriber registration.
+
+See the bundled README.md, SECURITY.md and STANDARDS.md for setup, protocol choices, live evidence, local Docker development, rotation and recovery. No certification is claimed. Full live RESOAuth login is unverified; realistic mock and WordPress integration/browser profiles are tested.
+
+== Installation ==
+1. Upload and activate the ZIP. PHP OpenSSL and cURL are required.
+2. Open Settings > SOCA. Review issuer, metadata, admission rules and local recovery.
+3. Public HTTPS sites enable the upstream button with a suggested domain allowlist on first activation. Validate connection/documents and test login. Local development sites need an admission rule and manual enablement.
+
+== Frequently Asked Questions ==
+= How do I recover local administrator access? =
+Use /wp-login.php?oauth_cimd_local=1. This skips automatic navigation only. You must still authenticate. Set SOCA_DISABLED=true in wp-config.php or run wp soca disable for emergency recovery.
+
+= Does proxy mode expose private keys? =
+No. Only public metadata and public keys are encoded. Proxy + inline key rotation changes client_id and can change pairwise subjects. Use a stable public JWKS URL for stable client identity.
+
+= Are existing accounts matched by email automatically? =
+Yes. A verified email from the configured provider can match an existing local account on first login, including an administrator. The local role is never changed. Choose a provider that reliably verifies addresses in your admission policy. An existing issuer/subject link cannot be silently replaced.
+
+= Are keys and identities deleted on uninstall? =
+No, unless OAUTH_CIMD_AUTH_ERASE_DATA is explicitly set to true before uninstall. WordPress users are never deleted by uninstall.
+
+== Changelog ==
+= 0.0.1 =
+Initial SOCA release: OIDC code flow with PKCE, CIMD metadata, verified-email access policy, identity binding, public key rotation, diagnostics and local recovery.

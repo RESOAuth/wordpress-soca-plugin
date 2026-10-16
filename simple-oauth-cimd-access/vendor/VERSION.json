@@ -1,0 +1,7 @@
+{
+  "package": "firebase/php-jwt",
+  "version": "7.2.1",
+  "commit": "0501f5729b9e2448516674aff07c7d1727869b8e",
+  "archive_sha256": "22aac93a4ef3d44eac8c97880937b495d8a9af30b3e3c2930f05c4ee53c16c02",
+  "change": "Namespace Firebase\\JWT replaced with OCIMD\\Vendor\\JWT only."
+}
