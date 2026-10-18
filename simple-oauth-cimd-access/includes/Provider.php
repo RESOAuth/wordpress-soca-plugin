@@ -17,7 +17,7 @@ final class Provider {
         foreach (['authorization_endpoint','token_endpoint','jwks_uri'] as $key) {
             Support::need(isset($d[$key]) && is_string($d[$key]), 'discovery', 'Missing OIDC discovery endpoint: ' . $key . '.'); Http::url($d[$key]);
         }
-        $query = parse_url($d['authorization_endpoint'], PHP_URL_QUERY);
+        $query = wp_parse_url($d['authorization_endpoint'], PHP_URL_QUERY);
         if ($query) {
             parse_str($query, $queryArgs);
             Support::need(!array_intersect(array_keys($queryArgs), ['response_type','response_mode','client_id','redirect_uri','scope','state','nonce','code_challenge','code_challenge_method','prompt','max_age']), 'authorization_query', 'Authorization endpoint must not contain reserved OAuth request parameters.');
@@ -118,7 +118,7 @@ final class Provider {
                 'client_id'=>$tx['client'],'code_verifier'=>$tx['verifier'],'client_assertion_type'=>'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
                 'client_assertion'=>Keys::assertion($tx['kid'], $tx['client'], $tx['settings']['assertion_audience'] === 'issuer' ? $tx['settings']['issuer'] : $d['token_endpoint'])]);
         } catch (Failure $e) {
-            if ($e->reason === 'http_status') { throw new Failure('token_http_status', $e->getMessage(), $e->diagnostics); }
+            if ($e->reason === 'http_status') { throw new Failure('token_http_status', $e->getMessage(), $e->diagnostics); } // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserve a redacted exception; output is escaped at render time.
             throw $e;
         }
         Support::need(!isset($r['json']['error']) && is_string($r['json']['id_token'] ?? null), 'oidc', 'Token endpoint did not return an OIDC ID token.');

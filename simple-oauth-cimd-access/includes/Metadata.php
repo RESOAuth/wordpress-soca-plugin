@@ -6,7 +6,7 @@ final class Metadata {
     public static function jwksUrl(): string { return add_query_arg('soca_doc', 'jwks', home_url('/')); }
     public static function proxyTemplate(string $template): void {
         Support::need(substr_count($template, '%s') === 1, 'proxy_template', 'The proxy template must contain exactly one literal %s in its path.');
-        $p = parse_url($template);
+        $p = wp_parse_url($template);
         Support::need(is_array($p) && str_contains($p['path'] ?? '', '%s') && !str_contains($p['host'] ?? '', '%s') && !str_contains($p['query'] ?? '', '%s'), 'proxy_template', 'The %s placeholder must be in the URL path, never the origin or query.');
         Http::url(str_replace('%s', 'e30', $template));
     }
@@ -49,7 +49,7 @@ final class Metadata {
     }
     public static function validate(array $s, Http $http): string {
         $url = self::clientId($s); Http::url($url);
-        Support::need(parse_url(self::callback(), PHP_URL_SCHEME) === 'https', 'callback_https', 'This web client requires an HTTPS WordPress site, including on localhost. Use a locally trusted certificate or an HTTPS tunnel.');
+        Support::need(wp_parse_url(self::callback(), PHP_URL_SCHEME) === 'https', 'callback_https', 'This web client requires an HTTPS WordPress site, including on localhost. Use a locally trusted certificate or an HTTPS tunnel.');
         $expected = self::document($s); $snapshotKeys = Keys::jwks(); $response = $http->request($url);
         self::validateDocument($expected, $response['json']);
         if ($s['key_mode'] === 'uri') {

@@ -38,7 +38,7 @@ test('allow any verified email overrides allowlists but never deny rules',functi
     expect(Policy::entries("Company.com, company.com;other.com\n",false)===['company.com','other.com']);
     foreach (['*.company.com','company.com.','company.com/','@company.com','localhost','127.0.0.1','аpple.com'] as $v) rejects(fn()=>Policy::domain($v));
 });
-test('public HTTPS defaults enable self-hosted login for the exact hostname',function(){ $s=Settings::defaults();expect($s['allow_domains']===['client.company.com'] && $s['mode']==='self' && $s['key_mode']==='uri' && $s['enabled'] && !$s['unrestricted'] && $s['assertion_audience']==='issuer' && $s['button']==='Continue with SSO'); });
+test('public HTTPS defaults enable self-hosted login for the exact hostname',function(){ $s=Settings::defaults();expect($s['allow_domains']===['client.company.com'] && $s['mode']==='self' && $s['key_mode']==='uri' && $s['enabled'] && !$s['unrestricted'] && $s['assertion_audience']==='issuer' && $s['button']==='Continue with SSO' && $s['proxy']==='https://dynamic-cimd.resoauth.cloud/cimd/%s'); });
 test('upgrade preserves effective allowlist policy and explicit unrestricted access',function(){
     $old=Settings::defaults();$old['unrestricted']=true;$old['trust_email']=true;$revision=$old['revision'];
     update_option('ocimd_settings',$old);$new=Settings::get();

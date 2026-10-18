@@ -8,7 +8,8 @@ final class Plugin {
             add_action('admin_post_' . $action, [self::class,$method]);
             add_action('admin_post_nopriv_' . $action, [self::class,$method]);
         }
-        add_action('login_form', static function () { echo self::button(Support::scalar($_GET, 'redirect_to')); });
+        // The button helper escapes its URL and label before returning HTML.
+        add_action('login_form', static function () { echo self::button(Support::scalar($_GET, 'redirect_to')); }); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
         add_action('login_init', [self::class,'automatic']);
         add_filter('login_message', static function ($message) {
             if (isset($_GET['soca_error']) || isset($_GET['oauth_cimd_error'])) {
@@ -67,7 +68,7 @@ final class Plugin {
             $doc = $kind === 'jwks' ? Keys::jwks() : Metadata::document(Settings::get(), true);
             header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: public, max-age=300, must-revalidate');
             header('X-Content-Type-Options: nosniff'); header('Access-Control-Allow-Origin: *');
-            if ($_SERVER['REQUEST_METHOD'] !== 'HEAD') { echo Support::json($doc); } exit;
+            if ($_SERVER['REQUEST_METHOD'] !== 'HEAD') { echo Support::json($doc); } exit; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON response, not HTML.
         } catch (\Throwable $e) { status_header(503); header('Cache-Control: no-store'); header('Content-Type: application/json'); echo '{"error":"metadata_unavailable"}'; exit; }
     }
     public static function button(string $destination = ''): string {
@@ -135,7 +136,7 @@ final class Plugin {
         $step = 'configuration';
         $s=Settings::get(); Support::need(!Settings::disabled(),'disabled','Upstream login is disabled by configuration.');
         Support::need($s['enabled'] || $purpose!=='login','disabled','Upstream login is not enabled.'); self::rate('start',30);
-        Support::need(is_ssl() && parse_url(Metadata::callback(),PHP_URL_SCHEME)==='https','https','HTTPS is required for browser transactions.');
+        Support::need(is_ssl() && wp_parse_url(Metadata::callback(),PHP_URL_SCHEME)==='https','https','HTTPS is required for browser transactions.');
         $step = 'discovery';
         $http=self::http(); $d=(new Provider($http))->discover($s); $context=Metadata::context($s); $checked=get_option('ocimd_checked',[]);
         $step = 'publication';

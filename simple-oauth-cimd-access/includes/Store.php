@@ -60,7 +60,7 @@ final class Store {
         Support::need(is_array($row) && (int)$row['expires'] >= time(), 'state', 'Invalid or expired login state.');
         $tx = self::open($row['payload']);
         if (!is_string($tx['user_agent'] ?? null) || !hash_equals($tx['user_agent'], $userAgentHash)) {
-            throw new Failure('user_agent_mismatch', 'The browser User-Agent changed during login.', ['ref'=>$tx['audit_ref'] ?? '', 'flow'=>$tx['purpose'] ?? '']);
+            throw new Failure('user_agent_mismatch', 'The browser User-Agent changed during login.', ['ref'=>$tx['audit_ref'] ?? '', 'flow'=>$tx['purpose'] ?? '']); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Diagnostic values are validated/redacted before display.
         }
         // One concurrent callback wins even with a persistent WordPress object cache.
         $deleted = $wpdb->query($wpdb->prepare("DELETE FROM $table WHERE id=%s AND expires >= %d", $id, time()));
