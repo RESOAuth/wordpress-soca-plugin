@@ -81,10 +81,10 @@ jobs:
           cd dist
           sha256sum -c SHA256SUMS
           unzip -t simple-oauth-cimd-access-0.0.2.zip
-      - uses: actions/upload-artifact@v7
+          unzip -Z1 simple-oauth-cimd-access-0.0.2.zip | grep -Fx 'simple-oauth-cimd-access/simple-oauth-cimd-access.php'
+      - name: Upload installable plugin ZIP
+        uses: actions/upload-artifact@v7
         with:
-          name: soca-0.0.2
-          path: |
-            dist/simple-oauth-cimd-access-0.0.2.zip
-            dist/SHA256SUMS
+          path: dist/simple-oauth-cimd-access-0.0.2.zip
+          archive: false
           if-no-files-found: error
