@@ -70,7 +70,7 @@ Both responses advertised `Cache-Control: public, immutable, max-age=86400, s-ma
 
 | Profile | Result |
 | --- | --- |
-| Synthetic OIDC/CIMD provider, ES256 ID tokens, ES256 private_key_jwt, query response, S256, RFC 9207 issuer | Full WordPress HTTP/browser login, cancellation/failure/recovery, test login, linking/unlinking and local logout passed. |
+| Synthetic OIDC/CIMD provider, ES256 ID tokens, ES256 private_key_jwt, query response, S256, RFC 9207 issuer | Baseline WordPress HTTP/browser login, cancellation/failure/recovery, test login and local logout passed; 0.0.3 email-based account selection passed the WordPress suite. |
 | Synthetic OIDC/CIMD provider with RS256 ID tokens and separate ES256 client keys | Signed-token verification passed with a 2048-bit provider RSA key. |
 | Synthetic UserInfo profile | Bearer request only to the discovered endpoint; exact sub matching and conflicting email-claim rejection tests passed. |
 | Synthetic rotated provider JWKS | One refresh on unknown kid; subsequent refresh throttled. Invalid algorithm/client-key substitution refused. |

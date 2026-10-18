@@ -4,7 +4,7 @@ Tags: openid-connect, oauth, login, cimd, pkce
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.0.2
+Stable tag: 0.0.3
 License: AGPLv3
 License URI: https://www.gnu.org/licenses/agpl-3.0.html
 
@@ -13,7 +13,7 @@ SOCA (Simple OAuth CIMD Access) is open-source WordPress single sign-on built an
 == Description ==
 SOCA is an open-source RESOAuth® plugin that also supports other compatible configured providers. OAuth redirects the browser securely; OpenID Connect establishes the user's identity; CIMD publishes this site's client details and public keys.
 
-One configurable OIDC provider per site. Initial settings use RESOAuth. Self-hosted and configurable HTTPS proxy CIMD modes, public JWKS, encrypted P-256 client keys, safe weekly rotation, exact issuer/subject identity binding, verified-email policies and optional controlled Subscriber registration.
+One configurable OIDC provider per site. Initial settings use RESOAuth. Self-hosted and configurable HTTPS proxy CIMD modes, public JWKS, encrypted P-256 client keys, safe weekly rotation, verified-email account selection on every login, admission policies and optional controlled Subscriber registration.
 
 See the bundled README.md, SECURITY.md and STANDARDS.md for setup, protocol choices, live evidence, local Docker development, rotation and recovery. No certification is claimed. Full live RESOAuth login is unverified; realistic mock and WordPress integration/browser profiles are tested.
 
@@ -30,12 +30,15 @@ Use /wp-login.php?soca_local=1. This skips automatic navigation only. You must s
 No. Only public metadata and public keys are encoded. Proxy + inline key rotation changes client_id and can change pairwise subjects. Use a stable public JWKS URL for stable client identity.
 
 = Are existing accounts matched by email automatically? =
-Yes. A verified email from the configured provider can match an existing local account on first login, including an administrator. The local role is never changed. Choose a provider that reliably verifies addresses in your admission policy. An existing issuer/subject link cannot be silently replaced.
+Yes. A verified email from the configured provider selects the matching local account on every login, including an administrator. The local role is never changed. Choose a provider that reliably verifies addresses in your admission policy. A changed provider subject does not require relinking.
 
-= Are keys and identities deleted on uninstall? =
-No, unless OAUTH_CIMD_AUTH_ERASE_DATA is explicitly set to true before uninstall. WordPress users are never deleted by uninstall.
+= Are keys and old binding rows deleted on uninstall? =
+No, unless SOCA_ERASE_DATA is explicitly set to true before uninstall. Old binding rows are no longer used for login. WordPress users are never deleted by uninstall.
 
 == Changelog ==
+= 0.0.3 =
+Select accounts by the current verified email on every login, remove subject binding from the login path, and add redacted step/reason/reference audit diagnostics.
+
 = 0.0.2 =
 Use SOCA names consistently across recovery, diagnostics and maintenance, retain legacy compatibility, and default the login button to "Continue with SSO".
 

@@ -41,6 +41,12 @@ try {
         expect(str_contains($url,'soca_local=1') && str_contains($url,'soca_error=1') && !str_contains($url,'oauth_cimd_'));
         $original=$_GET;
         try {
+            $ref='abcdef123456';
+            expect(str_contains(Plugin::recoveryUrl(true,$ref),'soca_error='.$ref));
+            $_GET=['soca_error'=>$ref];
+            expect(str_contains(apply_filters('login_message',''),'Reference: <code>'.$ref.'</code>'));
+            $_GET=['soca_error'=>'<script>'];
+            expect(!str_contains(apply_filters('login_message',''),'<script>'));
             $_GET=['soca_error'=>'1'];
             expect(str_contains(apply_filters('login_message',''),'SOCA login did not complete.'));
             $_GET=['oauth_cimd_error'=>'1'];
@@ -63,6 +69,7 @@ try {
         $state=Support::random();Store::createTransaction($state,['browser'=>hash('sha256',$b)]);$wpdb->update($wpdb->prefix.'ocimd_transactions',['expires'=>time()-1],['id'=>hash('sha256',$state)]);rejects(fn()=>Store::consumeTransaction($state,$b),'state');Store::clean();expect(!$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state))));
     });
     $ordinary=$make('soca-test-ordinary','ordinary@company.com');$admin=$make('soca-test-admin','privileged@company.com','administrator');
+    $ordinary2=$make('soca-test-ordinary2','ordinary2@company.com');
     test('access-rule test keeps its explanation beside the form',function()use($admin){
         $settings=Settings::get(); $originalUser=get_current_user_id(); $originalPost=$_POST; $originalRequest=$_REQUEST; $originalMethod=$_SERVER['REQUEST_METHOD']??null; $bufferLevel=ob_get_level();
         try {
@@ -89,19 +96,17 @@ try {
             if ($originalMethod===null) { unset($_SERVER['REQUEST_METHOD']); } else { $_SERVER['REQUEST_METHOD']=$originalMethod; }
         }
     });
-    test('verified email links an existing account by default',function()use($c,$s,$ordinary){expect(Identity::resolve($c,$s)->ID===$ordinary);expect(Identity::resolve($c,$s)->ID===$ordinary);});
-    test('identity stays with original user after verified email change',function()use($c,$s,$ordinary){$changed=$c;$changed['email']='changed@company.com';expect(Identity::resolve($changed,$s)->ID===$ordinary);expect(get_userdata($ordinary)->user_email==='ordinary@company.com');});
-    test('pairwise-subject changes cannot silently relink by email',function()use($c,$s){$changed=$c;$changed['sub']='wp-test-changed';rejects(fn()=>Identity::resolve($changed,$s),'silent_relink');});
-    test('verified email also links an administrator by default',function()use($c,$s,$admin){$c['email']='privileged@company.com';$c['sub']='wp-admin-sub';expect(Identity::resolve($c,$s)->ID===$admin);expect(in_array('administrator',get_userdata($admin)->roles,true));});
-    $ordinary2=$make('soca-test-ordinary2','ordinary2@company.com');
+    test('verified email selects an existing account on every login',function()use($c,$s,$ordinary){expect(Identity::resolve($c,$s)->ID===$ordinary);expect(Identity::resolve($c,$s)->ID===$ordinary);});
+    test('a changed subject still selects the same verified email account',function()use($c,$s,$ordinary){$changed=$c;$changed['sub']='wp-test-changed';expect(Identity::resolve($changed,$s)->ID===$ordinary);});
+    test('a changed verified email selects its current local account',function()use($c,$s,$ordinary,$ordinary2){$changed=$c;$changed['email']='ordinary2@company.com';expect(Identity::resolve($changed,$s)->ID===$ordinary2);expect(get_userdata($ordinary)->user_email==='ordinary@company.com');});
+    test('verified email also selects an administrator by default',function()use($c,$s,$admin){$c['email']='privileged@company.com';$c['sub']='wp-admin-sub';expect(Identity::resolve($c,$s)->ID===$admin);expect(in_array('administrator',get_userdata($admin)->roles,true));});
     test('verified email matches another ordinary account',function()use($c,$s,$ordinary2){$c['sub']='wp-ordinary2';$c['email']='ordinary2@company.com';expect(Identity::resolve($c,$s)->ID===$ordinary2);});
     test('registration off; explicit controlled creation is subscriber only',function()use($c,$s,&$created){$c['sub']='wp-new';$c['email']='new@company.com';rejects(fn()=>Identity::resolve($c,$s),'registration_disabled');$s['create_users']=true;$c['role']='administrator';$c['roles']=['administrator'];$u=Identity::resolve($c,$s);$created[]=$u->ID;expect($u->roles===['subscriber']);});
-    test('email_verified must be boolean true and denial still applies to linked identity',function()use($c,$s){$c['email_verified']='true';rejects(fn()=>Identity::resolve($c,$s),'access_denied');$c['email_verified']=true;$s['deny_domains']=['company.com'];rejects(fn()=>Identity::resolve($c,$s),'access_denied');});
+    test('email_verified must be boolean true and denial applies on every login',function()use($c,$s){$c['email_verified']='true';rejects(fn()=>Identity::resolve($c,$s),'access_denied');$c['email_verified']=true;$s['deny_domains']=['company.com'];rejects(fn()=>Identity::resolve($c,$s),'access_denied');});
     $dup=$make('soca-test-duplicate','temporary@company.com');
-    test('ambiguous local emails rejected',function()use($c,$s,$dup){global $wpdb;$wpdb->update($wpdb->users,['user_email'=>'ordinary2@company.com'],['ID'=>$dup]);$c['email']='ordinary2@company.com';$c['sub']='ambiguous-sub';rejects(fn()=>Identity::resolve($c,$s),'ambiguous_email');});
+    test('ambiguous local emails rejected',function()use($c,$s,$dup){global $wpdb;$wpdb->update($wpdb->users,['user_email'=>'ordinary2@company.com'],['ID'=>$dup]);try {$c['email']='ordinary2@company.com';$c['sub']='ambiguous-sub';rejects(fn()=>Identity::resolve($c,$s),'ambiguous_email');} finally {$wpdb->update($wpdb->users,['user_email'=>'temporary@company.com'],['ID'=>$dup]);clean_user_cache($dup);}});
     test('existing custom capabilities remain unchanged',function()use($ordinary2,$c,$s){$u=get_userdata($ordinary2);$u->add_cap('edit_posts');$c['sub']='wp-ordinary2';$c['email']='ordinary2@company.com';expect(Identity::resolve($c,$s)->ID===$ordinary2);expect(get_userdata($ordinary2)->has_cap('edit_posts'));$u->remove_cap('edit_posts');});
-    test('unlink is scoped to local user',function()use($ordinary,$admin){$rows=Identity::forUser($ordinary);Identity::unlink($admin,$rows[0]['identity_hash']);expect(count(Identity::forUser($ordinary))===1);Identity::unlink($ordinary,$rows[0]['identity_hash']);expect(count(Identity::forUser($ordinary))===0);});
-    test('redacted audit excludes tokens, email and subjects',function(){Support::audit('login_success',1);$log=Support::json(get_option('ocimd_audit'));expect(!str_contains($log,'@company.com') && !str_contains($log,'wp-test-1') && !str_contains($log,'access_token'));});
+    test('redacted audit keeps failure step, reason and reference',function(){Support::audit('login_failed',0,['flow'=>'login','step'=>'token_exchange','reason'=>'token_http_status','ref'=>'abcdef123456','http_status'=>401,'email'=>'secret@company.com','token'=>'access_token']);$log=get_option('ocimd_audit');$last=end($log);expect($last['event']==='login_failed' && $last['step']==='token_exchange' && $last['reason']==='token_http_status' && $last['ref']==='abcdef123456' && $last['http_status']===401);$json=Support::json($log);expect(!str_contains($json,'@company.com') && !str_contains($json,'wp-test-1') && !str_contains($json,'access_token'));});
     test('public metadata exposes public keys only and no access policy',function(){ $d=Metadata::document(Settings::get(),true);Metadata::noPrivateKeys($d);$j=Support::json($d);expect(!str_contains($j,'allow_domains') && !str_contains($j,'PRIVATE KEY')); });
 } finally {
     require_once ABSPATH.'wp-admin/includes/user.php';

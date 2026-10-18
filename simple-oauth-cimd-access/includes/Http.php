@@ -53,9 +53,9 @@ class Http {
                 return strlen($line);
             }]);
         if ($form !== null) { curl_setopt($ch, CURLOPT_POST, true); curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($form, '', '&', PHP_QUERY_RFC3986)); }
-        $ok = curl_exec($ch); $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE); curl_close($ch);
-        Support::need($ok !== false, 'http_transport', 'HTTPS request failed (TLS, DNS, timeout or response limit).');
-        Support::need($status === 200, 'http_status', 'HTTPS endpoint must return 200 without redirection (received ' . (int)$status . ').');
+        $ok = curl_exec($ch); $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE); $curlErrno = curl_errno($ch); curl_close($ch);
+        if ($ok === false) { throw new Failure('http_transport', 'HTTPS request failed (TLS, DNS, timeout or response limit).', ['curl_errno'=>$curlErrno]); }
+        if ($status !== 200) { throw new Failure('http_status', 'HTTPS endpoint must return 200 without redirection (received ' . (int)$status . ').', ['http_status'=>(int)$status]); }
         Support::need((bool) preg_match('~^application/(?:json|[a-z0-9.+-]+\+json)(?:\s*;|$)~i', $headers['content-type'] ?? ''), 'content_type', 'Endpoint must return an application/json document.');
         return ['json'=>Support::object($body), 'headers'=>$headers];
     }

@@ -25,22 +25,22 @@ const test = async (name, fn) => { await fn(); passed++; console.log('PASS ' + n
    await upstream('/?signed-in=1'); assert.equal(new URL(page.url()).searchParams.get('signed-in'),'1');
    const cookies=await context.cookies();assert(cookies.some(c=>c.name.startsWith('wordpress_logged_in_')));assert(!cookies.some(c=>c.name.startsWith('__Host-ocimd_')));
  });
- await test('callback replay fails and presents local recovery',async()=>{await page.goto(lastCallback);assert(page.url().includes('soca_error=1'));assert(await page.locator('#user_login').isVisible());});
+ await test('callback replay fails and presents a matching audit reference',async()=>{await page.goto(lastCallback);const ref=new URL(page.url()).searchParams.get('soca_error');assert.match(ref,/^[a-f0-9]{12}$/);assert(await page.locator('#user_login').isVisible());assert((await page.locator('.message').innerText()).includes(ref));const events=JSON.parse(cli('soca','audit'));assert(events.some(e=>e.event==='login_failed'&&e.ref===ref&&e.step==='transaction'&&e.reason==='state'));});
  await context.clearCookies();
  for(const mode of ['nonce','issuer','unverified','expired','cancel']) await test('rejects '+mode+' response without redirect loop',async()=>{
-   scenario(mode);await upstream();assert(page.url().includes('soca_local=1'));assert(page.url().includes('soca_error=1'));assert(!(await context.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));
+   scenario(mode);await upstream();assert(page.url().includes('soca_local=1'));assert.match(new URL(page.url()).searchParams.get('soca_error'),/^[a-f0-9]{12}$/);assert(!(await context.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));
  });
  scenario('valid');
  await test('a stolen state cannot finish in another browser',async()=>{
    const start=await context.request.get(base+'/wp-admin/admin-post.php?action=soca_start',{maxRedirects:0});assert.equal(start.status(),302);
    const auth=start.headers().location;const other=await browser.newContext({ignoreHTTPSErrors:true});const stolen=await other.newPage();
-   await stolen.goto(auth);assert(stolen.url().includes('soca_error=1'));assert(!(await other.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));await other.close();
-   await page.goto(auth);assert(!page.url().includes('soca_error=1'));await context.clearCookies();
+   await stolen.goto(auth);assert(new URL(stolen.url()).searchParams.has('soca_error'));assert(!(await other.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));await other.close();
+   await page.goto(auth);assert(!new URL(page.url()).searchParams.has('soca_error'));await context.clearCookies();
  });
  await test('a settings change invalidates an in-flight transaction',async()=>{
    const start=await context.request.get(base+'/wp-admin/admin-post.php?action=soca_start',{maxRedirects:0});assert.equal(start.status(),302);
    cli('eval',"$s=OCIMD\\Settings::get();$s['revision']=OCIMD\\Support::random();update_option('ocimd_settings',$s,false);");
-   await page.goto(start.headers().location);assert(page.url().includes('soca_error=1'));assert(!(await context.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));
+   await page.goto(start.headers().location);assert(new URL(page.url()).searchParams.has('soca_error'));assert(!(await context.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));
  });
  await test('automatic mode and recovery/password flows',async()=>{
    cli('eval',"$s=OCIMD\\Settings::get();$s['automatic']=true;update_option('ocimd_settings',$s,false);");

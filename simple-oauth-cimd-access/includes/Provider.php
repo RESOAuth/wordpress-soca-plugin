@@ -118,7 +118,7 @@ final class Provider {
                 'client_id'=>$tx['client'],'code_verifier'=>$tx['verifier'],'client_assertion_type'=>'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
                 'client_assertion'=>Keys::assertion($tx['kid'], $tx['client'], $tx['settings']['assertion_audience'] === 'issuer' ? $tx['settings']['issuer'] : $d['token_endpoint'])]);
         } catch (Failure $e) {
-            if ($e->reason === 'http_status') { throw new Failure('token_http_status', $e->getMessage()); }
+            if ($e->reason === 'http_status') { throw new Failure('token_http_status', $e->getMessage(), $e->diagnostics); }
             throw $e;
         }
         Support::need(!isset($r['json']['error']) && is_string($r['json']['id_token'] ?? null), 'oidc', 'Token endpoint did not return an OIDC ID token.');

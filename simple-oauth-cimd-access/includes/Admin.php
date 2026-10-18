@@ -5,14 +5,14 @@ final class Admin {
         add_action('admin_menu', static function () { add_options_page('SOCA - Simple OAuth CIMD Access','SOCA','manage_options','simple-oauth-cimd-access',[self::class,'page']); });
         add_action('admin_enqueue_scripts', static function ($hook) {
             if ($hook==='settings_page_simple-oauth-cimd-access') {
-                wp_enqueue_script('soca-admin',plugins_url('assets/admin.js',SOCA_FILE),[], '0.0.2',true);
-                wp_enqueue_style('soca-admin',plugins_url('assets/admin.css',SOCA_FILE),[], '0.0.2');
+                wp_enqueue_script('soca-admin',plugins_url('assets/admin.js',SOCA_FILE),[], '0.0.3',true);
+                wp_enqueue_style('soca-admin',plugins_url('assets/admin.css',SOCA_FILE),[], '0.0.3');
             }
         });
         add_filter('site_status_tests',static function ($tests) { $tests['direct']['soca']=['label'=>'SOCA','test'=>[self::class,'health']]; return $tests; });
         add_filter('debug_information',static function ($info) {
             $s=Settings::get(); $info['soca']=['label'=>'SOCA - Simple OAuth CIMD Access','fields'=>[
-                'version'=>['label'=>'Version','value'=>'0.0.2'], 'mode'=>['label'=>'Metadata mode','value'=>$s['mode']],
+                'version'=>['label'=>'Version','value'=>'0.0.3'], 'mode'=>['label'=>'Metadata mode','value'=>$s['mode']],
                 'enabled'=>['label'=>'Enabled','value'=>$s['enabled'] && !Settings::disabled()?'yes':'no'],
                 'cron'=>['label'=>'Maintenance','value'=>wp_next_scheduled('soca_maintenance')?'scheduled':'missing']]]; return $info;
         });
@@ -23,7 +23,7 @@ final class Admin {
         try { $k=Keys::get(); $ok=$ok && $k['since']>time()-691200; } catch (\Throwable $e) { $ok=false; }
         return ['label'=>$ok?'SOCA publication and maintenance are current':'SOCA needs setup or maintenance review',
             'status'=>$ok?'good':'recommended','badge'=>['label'=>'Security','color'=>'blue'],
-            'description'=>'<p>Review provider compatibility, public key publication, weekly rollover and the latest test login. Cron delays or provider caching can safely delay rollover. Inline proxy keys change client identity.</p>',
+            'description'=>'<p>Review provider compatibility, public key publication, weekly rollover and the latest test login. Cron delays or provider caching can safely delay rollover. Inline proxy keys change the client identifier.</p>',
             'actions'=>'<a href="' . esc_url(admin_url('options-general.php?page=simple-oauth-cimd-access')) . '">Review SOCA</a>','test'=>'soca'];
     }
     private static function input(string $key, string $label, array $s, string $help='', string $type='text'): void {
@@ -64,9 +64,9 @@ final class Admin {
         if ($notice) { echo '<div role="status" class="notice ' . ($error?'notice-error':'notice-success') . '"><p>' . esc_html($notice) . '</p></div>'; }
         $test=get_transient('ocimd_test_' . get_current_user_id());
         if ($test) { echo '<div class="notice notice-success"><p>Test login: cryptographic OIDC validation succeeded. Admission policy: ' . esc_html($test['message']) . ' No account or session was changed.</p></div>'; }
-        if (Settings::disabled()) { echo '<div class="notice notice-warning"><p>SOCA is disabled by configuration. All upstream login and linking are disabled.</p></div>'; }
+        if (Settings::disabled()) { echo '<div class="notice notice-warning"><p>SOCA is disabled by configuration. Upstream login is disabled.</p></div>'; }
         $host=(string)wp_parse_url(home_url('/'),PHP_URL_HOST);
-        if (Support::localHost($host)) { echo '<div class="notice notice-info"><p>Local development detected. Use HTTPS with a certificate your browser trusts. Proxy + inline public keys are selected because a cloud provider cannot fetch localhost metadata or JWKS. Add an allowed email/domain or select Allow any verified email, then enable login. Rotating inline keys changes the client identifier and may require an account to be linked again.</p></div>'; }
+        if (Support::localHost($host)) { echo '<div class="notice notice-info"><p>Local development detected. Use HTTPS with a certificate your browser trusts. Proxy + inline public keys are selected because a cloud provider cannot fetch localhost metadata or JWKS. Add an allowed email/domain or select Allow any verified email, then enable login. Rotating inline keys changes the client identifier and may require fresh provider consent.</p></div>'; }
         $recoveryUrl=Plugin::recoveryUrl();
         echo '<p><strong>Recovery URL:</strong> <a href="' . esc_url($recoveryUrl) . '">' . esc_html($recoveryUrl) . '</a></p>';
         echo '<form method="post">'; wp_nonce_field('ocimd_settings'); echo '<input type="hidden" name="operation" value="save"><h2>Provider and public metadata</h2><table class="form-table">';
@@ -89,7 +89,7 @@ final class Admin {
         foreach (['allow_domains'=>'Allowed domains','deny_domains'=>'Denied domains','allow_emails'=>'Allowed emails','deny_emails'=>'Denied emails'] as $key=>$label) {
             echo '<div class="soca-policy" data-policy="' . (str_starts_with($key,'allow_')?'allow':'deny') . '" data-kind="' . (str_ends_with($key,'emails')?'email':'domain') . '"><label for="' . esc_attr($key) . '"><strong>' . esc_html($label) . '</strong></label><textarea id="' . esc_attr($key) . '" name="' . esc_attr($key) . '" rows="3" aria-describedby="' . esc_attr($key) . '-help">' . esc_textarea(implode("\n",$s[$key])) . '</textarea><p id="' . esc_attr($key) . '-help" class="description">One per line, or paste entries separated by commas, spaces or semicolons. Maximum 200 entries.</p></div>';
         }
-        echo '<h2>Accounts and login</h2><p>On first login, a verified email from this configured provider can link to an existing account, including an administrator. The local account’s role is preserved. Use a provider you trust to verify the emails in your allow policy.</p>';
+        echo '<h2>Accounts and login</h2><p>On every login, a verified email from this configured provider selects the matching local account, including an administrator. The local account’s role is preserved. A changed provider subject does not require relinking. Use a provider you trust to verify the emails in your allow policy.</p>';
         self::checkbox('create_users','Create missing accounts as Subscribers after verified-email policy admission. Existing roles are never changed.',$s);
         self::checkbox('enabled','Enable the upstream button on the standard WordPress login screen.',$s);
         self::checkbox('automatic','Automatically redirect ordinary GET visits to wp-login.php upstream. The recovery URL, logout, reset, interim and reauthentication flows remain local.',$s);
@@ -111,8 +111,8 @@ final class Admin {
         }
         echo '</div></form>';
         echo '<h2>Operations</h2><p>Signing keys rotate weekly after the replacement has been published for the cache safety window. Old keys remain for the window plus 12 minutes. A missed cron or unreachable mirror delays rotation. Keep WordPress salts stable, protect database backups, and run <code>wp soca maintain</code> hourly using real cron on low-traffic sites.</p>';
-        echo '<p>To recover, use the recovery URL above, <code>wp soca disable</code>, or set <code>define(\'SOCA_DISABLED\', true);</code> in wp-config.php. If a provider changes a linked subject after a client ID change, an administrator can deliberately remove that site’s binding with <code>wp soca unlink USER_ID</code> before a fresh verified-email login. Logout ends the WordPress session only.</p>';
+        echo '<p>To recover, use the recovery URL above, <code>wp soca disable</code>, or set <code>define(\'SOCA_DISABLED\', true);</code> in wp-config.php. A failed login shows a reference that matches a redacted audit event below. Logout ends the WordPress session only.</p>';
         try { echo '<details><summary>Key publication and maintenance details</summary><pre>' . esc_html(json_encode(Plugin::status(),JSON_PRETTY_PRINT)) . '</pre></details>'; } catch (\Throwable $e) { echo '<p>Cannot read keys. Restore encryption configuration from backup.</p>'; }
-        echo '<details><summary>Recent redacted audit events (last 100)</summary><pre>' . esc_html(json_encode(get_option('ocimd_audit',[]),JSON_PRETTY_PRINT)) . '</pre></details></div>';
+        echo '<details><summary>Recent redacted audit events (last 100)</summary><p>Match the reference from the login page to a <code>login_failed</code> event. Its flow, step and reason identify where the attempt stopped. HTTP status or cURL error numbers appear when available. Events contain no email, subject, token or provider response body.</p><pre>' . esc_html(json_encode(get_option('ocimd_audit',[]),JSON_PRETTY_PRINT)) . '</pre></details></div>';
     }
 }

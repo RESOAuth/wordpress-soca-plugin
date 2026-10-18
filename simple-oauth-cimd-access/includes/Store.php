@@ -5,17 +5,6 @@ final class Store {
         global $wpdb;
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         $collate = $wpdb->get_charset_collate();
-        dbDelta("CREATE TABLE {$wpdb->prefix}ocimd_identities (
-            identity_hash char(64) NOT NULL,
-            issuer text NOT NULL,
-            subject text NOT NULL,
-            user_id bigint(20) unsigned NOT NULL,
-            user_provider char(64) NOT NULL,
-            created_at bigint(20) NOT NULL,
-            PRIMARY KEY  (identity_hash),
-            UNIQUE KEY user_provider (user_provider),
-            KEY user_id (user_id)
-        ) $collate;");
         dbDelta("CREATE TABLE {$wpdb->prefix}ocimd_transactions (
             id char(64) NOT NULL,
             expires bigint(20) NOT NULL,
@@ -23,10 +12,8 @@ final class Store {
             PRIMARY KEY  (id),
             KEY expires (expires)
         ) $collate;");
-        foreach (['ocimd_identities','ocimd_transactions'] as $suffix) {
-            $table = $wpdb->prefix . $suffix;
-            Support::need($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table))) === $table, 'schema', 'Plugin database tables could not be created.');
-        }
+        $table = $wpdb->prefix . 'ocimd_transactions';
+        Support::need($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table))) === $table, 'schema', 'Plugin database table could not be created.');
         update_option('ocimd_schema', 1, false);
     }
     public static function locked(string $name, callable $fn) {

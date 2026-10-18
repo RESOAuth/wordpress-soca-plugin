@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SOCA - Simple OAuth CIMD Access
  * Description: Open-source WordPress SSO with OIDC, OAuth PKCE and CIMD, built and supported by RESOAuth®; configurable for compatible providers.
- * Version: 0.0.2
+ * Version: 0.0.3
  * Requires at least: 6.8
  * Requires PHP: 8.1
  * License: AGPL-3.0-only

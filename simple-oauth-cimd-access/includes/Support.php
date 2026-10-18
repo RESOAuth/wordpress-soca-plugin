@@ -2,7 +2,7 @@
 namespace OCIMD;
 
 final class Failure extends \RuntimeException {
-    public function __construct(public string $reason, string $message) { parent::__construct($message); }
+    public function __construct(public string $reason, string $message, public array $diagnostics = []) { parent::__construct($message); }
 }
 final class Support {
     public static function need(bool $ok, string $code, string $message): void {
@@ -53,11 +53,21 @@ final class Support {
         if (preg_match('~/(?:wp-login\.php|wp-admin/admin-post\.php)$~', $p['path'] ?? '')) { return $fallback; }
         return $url;
     }
-    public static function audit(string $event, int $user = 0): void {
-        // Fixed codes only. Never claims, subject, email, URLs, tokens, errors from upstream, or IPs.
+    public static function audit(string $event, int $user = 0, array $context = []): void {
+        // Only locally chosen codes and random references. Never store claims, emails,
+        // subjects, URLs, tokens, upstream messages or IP addresses.
         if (!preg_match('/^[a-z_]{1,48}$/D', $event)) { $event = 'internal_error'; }
         $log = get_option('ocimd_audit', []);
-        $log[] = ['time'=>gmdate('c'), 'event'=>$event, 'user'=>$user];
+        if (!is_array($log)) { $log = []; }
+        $entry = ['time'=>gmdate('c'), 'event'=>$event, 'user'=>$user];
+        foreach (['flow','step','reason'] as $key) {
+            if (isset($context[$key]) && is_string($context[$key]) && preg_match('/^[a-z_]{1,48}$/D', $context[$key])) { $entry[$key] = $context[$key]; }
+        }
+        if (isset($context['ref']) && is_string($context['ref']) && preg_match('/^[a-f0-9]{12}$/D', $context['ref'])) { $entry['ref'] = $context['ref']; }
+        if (isset($context['exception']) && is_string($context['exception']) && preg_match('/^[A-Za-z0-9_\\\\]{1,96}$/D', $context['exception'])) { $entry['exception'] = $context['exception']; }
+        if (isset($context['http_status']) && is_int($context['http_status']) && $context['http_status'] >= 100 && $context['http_status'] <= 599) { $entry['http_status'] = $context['http_status']; }
+        if (isset($context['curl_errno']) && is_int($context['curl_errno']) && $context['curl_errno'] >= 1 && $context['curl_errno'] <= 99) { $entry['curl_errno'] = $context['curl_errno']; }
+        $log[] = $entry;
         update_option('ocimd_audit', array_slice($log, -100), false);
     }
 }
