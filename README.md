@@ -4,11 +4,11 @@ SOCA (Simple OAuth CIMD Access) is an open-source WordPress single sign-on plugi
 
 Install `dist/simple-oauth-cimd-access-0.0.1.zip` using **Plugins → Add Plugin → Upload Plugin**, activate it, then open **Settings → SOCA**. PHP 8.1+, OpenSSL, cURL, and WordPress 6.8+ are required. The release contains its isolated JWT dependency; Composer is not needed on the WordPress server.
 
-When upgrading from the old `oauth-cimd-auth` folder, install the new ZIP, deactivate **OAuth CIMD Auth**, then activate **SOCA**. Both folders must not run together. Existing site settings, encrypted keys and issuer/subject bindings are retained under their original internal database names; uninstalling the old plugin preserves them by default. Check the new client metadata URL and complete a fresh test login before removing the old folder.
+When upgrading from the old `oauth-cimd-auth` folder, install the new ZIP, deactivate **OAuth CIMD Auth**, then activate **SOCA**. Both folders must not run together. Existing site settings, encrypted keys and issuer/subject bindings are retained under their original internal database names; uninstalling the old plugin preserves them by default. The internal `OCIMD` PHP namespace and `ocimd_*` storage names remain for compatibility. Check the new client metadata URL and complete a fresh test login before removing the old folder.
 
 ## Setup
 
-1. Keep a local administrator account and password. Bookmark `/wp-login.php?oauth_cimd_local=1`. Confirm WordPress uses HTTPS and has unique authentication keys/salts in `wp-config.php`.
+1. Keep a local administrator account and password. Bookmark `/wp-login.php?soca_local=1`. Confirm WordPress uses HTTPS and has unique authentication keys/salts in `wp-config.php`.
 2. Review the issuer, provider name and button label. Initial settings use RESOAuth at `https://auth.resoauth.cloud`, scopes `openid email profile`, ES256 client authentication. Public HTTPS sites default to self-hosted CIMD and the derived JWKS URL, and show the login button on activation. Local sites select the supplied configurable proxy and inline public keys; their login button stays off until an admission rule is chosen.
 3. Review admission rules. The suggested domain is the exact home hostname with one leading `www.` removed; localhost, IPs and reserved development names are excluded. Deny wins; either allowlist can admit. **Allow any verified email/domain** starts off and, when selected, hides the allowlists while keeping denylists active. Domains match exactly. First-login verified-email matching includes existing administrator accounts by default. Registration remains off; new accounts, when enabled, are Subscribers.
    On upgrade, a previously saved unrestricted flag is cleared when allowlists were populated, preserving the old effective policy until an administrator deliberately selects Allow any.
@@ -58,7 +58,7 @@ Use `podman compose` in place of `docker compose` if preferred; both use the sup
 - A verified email from the configured provider can match any existing site member on first login, including an administrator. This gives that provider a route to the account's existing WordPress role, so choose a provider whose email verification you trust for every admitted domain. The plugin never assigns roles from provider claims.
 - Signing in with a verified email that matches an eligible local user links the identity automatically. No profile controls or separate linking step are needed.
 - A changed pairwise subject will **not** silently replace an existing identity via email matching. If you have confirmed the provider changed the subject after a client ID change, recover locally and run `wp soca unlink USER_ID` for the affected account on the correct site, then start a fresh upstream login. This removes only that user’s binding for the configured issuer. A different verified email for an already-linked subject does not change the local email or identity.
-- `?oauth_cimd_local=1` only skips automatic navigation. It does not authenticate anyone. Password recovery, reset, interim login and logout flows are preserved. Local logout ends the WordPress session only; it does not claim provider-wide logout.
+- `?soca_local=1` only skips automatic navigation. It does not authenticate anyone. Existing `?oauth_cimd_local=1` bookmarks still work. Password recovery, reset, interim login and logout flows are preserved. Local logout ends the WordPress session only; it does not claim provider-wide logout.
 
 Emergency recovery in `wp-config.php`:
 
@@ -81,7 +81,7 @@ In proxy + inline mode, staging a new public key changes the encoded document an
 WP-Cron runs maintenance hourly. Use real cron on low-traffic sites:
 
 ```sh
-wp --path=/srv/wordpress --url=https://site.example.org oauth-cimd maintain
+wp --path=/srv/wordpress --url=https://site.example.org soca maintain
 ```
 
 Schedule that command hourly with your host's scheduler. Do not run it as a substitute for provider cache confirmation. Additional commands:
@@ -95,6 +95,8 @@ wp soca audit    # last 100 redacted event codes and local user IDs
 wp soca disable # disable upstream button/automatic mode
 wp soca unlink USER_ID # deliberately clear this site's configured-provider binding
 ```
+
+The earlier `wp oauth-cimd` command remains an alias for existing jobs; use `wp soca` in new scripts.
 
 On multisite, always select the site with `--url`. Settings, policy, encrypted keys, transactions and identity bindings are isolated per site. New sites initialize lazily on first request. Site Health reports missing/stale maintenance and overdue rotation; its debug export excludes secrets. Web-server/proxy logs should omit callback query strings because authorization responses contain short-lived codes and state. The plugin's own audit never records these, emails, subjects, passwords, raw provider errors or tokens.
 

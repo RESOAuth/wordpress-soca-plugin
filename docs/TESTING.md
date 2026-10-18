@@ -14,7 +14,7 @@ Executed on 16 October 2026. Containerized WordPress **7.1.3**, PHP **8.3.35**, 
 | `tests/browser.cjs` | Real HTTPS browser/WordPress requests with a synthetic provider transport. Full authorization/code/assertion/PKCE/ID-token/session flow, replay, bad nonce/issuer/time, unverified email, cancellation, automatic mode, local recovery/password flow, redirect confinement, admin UI/bulk input, public-document validation, test login preserving admin session, absence of profile identity controls, and logout avoiding loops. |
 | `tests/multisite.php` | Independent settings, keys, encryption contexts, transactions and identities; nonmember refusal; separate binding on each site; site removal without affecting another site's identity; network deletion cleanup and network spam-account refusal. |
 
-Synthetic profiles use actual OpenSSL-generated signing keys and real JWT signatures. The mock token endpoint checks code/client/redirect binding, S256 proof and the signed client assertion. It is not a fake boolean "login passed" hook. Outbound HTTP responses are supplied at the explicit trusted `oauth_cimd_auth_http` test boundary; this does **not** claim full native-transport coverage for every network fault. Native transport was additionally used to fetch live RESOAuth discovery successfully, and public documents were fetched over the running WordPress HTTPS server. Syntax checks and Composer advisory audit also passed.
+Synthetic profiles use actual OpenSSL-generated signing keys and real JWT signatures. The mock token endpoint checks code/client/redirect binding, S256 proof and the signed client assertion. It is not a fake boolean "login passed" hook. Outbound HTTP responses are supplied at the explicit trusted `soca_http` test boundary; this does **not** claim full native-transport coverage for every network fault. Native transport was additionally used to fetch live RESOAuth discovery successfully, and public documents were fetched over the running WordPress HTTPS server. Syntax checks and Composer advisory audit also passed.
 
 Full live RESOAuth end-user interoperability, real pairwise-subject changes, provider cache behavior, automatic mirror infrastructure, independent penetration testing and OpenID certification remain unverified. Site Health checks describe maintenance/publication status; they are not certification.
 
@@ -33,47 +33,47 @@ The unit bootstrap supplies only the WordPress functions needed for isolated pro
 Use a fresh local Compose installation, never a production database. `tests/wordpress.php` creates/removes its own test users but still requires `WP_ENVIRONMENT_TYPE=local`. Test fixtures deliberately use synthetic keys and fixed local credentials. These files are **outside** the installable plugin ZIP.
 
 ```sh
-podman compose -p ocimd-local up -d
+podman compose -p soca-local up -d
 mkdir -p work
 curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o work/wp-cli.phar
-podman cp work/wp-cli.phar ocimd-local_wordpress_1:/tmp/wp-cli.phar
-podman exec -u www-data ocimd-local_wordpress_1 php /tmp/wp-cli.phar core install \
-  --url=https://localhost:8443 --title='OAuth CIMD Test' \
+podman cp work/wp-cli.phar soca-local_wordpress_1:/tmp/wp-cli.phar
+podman exec -u www-data soca-local_wordpress_1 php /tmp/wp-cli.phar core install \
+  --url=https://localhost:8443 --title='SOCA Test' \
   --admin_user=localadmin --admin_password='Local-fixture-password-749!' \
   --admin_email=admin@company.com --skip-email
-podman exec -u www-data ocimd-local_wordpress_1 php /tmp/wp-cli.phar plugin activate simple-oauth-cimd-access
-podman cp tests ocimd-local_wordpress_1:/tmp/tests
-podman exec -u www-data ocimd-local_wordpress_1 php /tmp/wp-cli.phar eval-file /tmp/tests/wordpress.php
+podman exec -u www-data soca-local_wordpress_1 php /tmp/wp-cli.phar plugin activate simple-oauth-cimd-access
+podman cp tests soca-local_wordpress_1:/tmp/tests
+podman exec -u www-data soca-local_wordpress_1 php /tmp/wp-cli.phar eval-file /tmp/tests/wordpress.php
 python3 tests/concurrency.py
 ```
 
-`tests/concurrency.py` accepts `CONTAINER_ENGINE` (default `podman`) and `OCIMD_CONTAINER` (default `ocimd-local_wordpress_1`). Docker Compose commonly uses hyphens in container names; set the container variable accordingly. The fixed fixture password is published intentionally and must only be used in this loopback-only disposable installation.
+`tests/concurrency.py` accepts `CONTAINER_ENGINE` (default `podman`) and `SOCA_CONTAINER` (default `soca-local_wordpress_1`). Docker Compose commonly uses hyphens in container names; set the container variable accordingly. The fixed fixture password is published intentionally and must only be used in this loopback-only disposable installation.
 
 ## Browser suite
 
 After the disposable WordPress installation above:
 
 ```sh
-podman exec ocimd-local_wordpress_1 mkdir -p /var/www/html/wp-content/mu-plugins
-podman cp tests/mock-provider.php ocimd-local_wordpress_1:/var/www/html/wp-content/mu-plugins/ocimd-fixture.php
-podman exec -u www-data ocimd-local_wordpress_1 php /tmp/wp-cli.phar config set OCIMD_TEST_FIXTURES true --raw
-podman exec -u www-data ocimd-local_wordpress_1 php /tmp/wp-cli.phar eval-file /tmp/tests/fixture-setup.php
-podman cp tests/Caddyfile ocimd-local_https_1:/tmp/test-Caddyfile
-podman exec ocimd-local_https_1 caddy reload --config /tmp/test-Caddyfile --adapter caddyfile
+podman exec soca-local_wordpress_1 mkdir -p /var/www/html/wp-content/mu-plugins
+podman cp tests/mock-provider.php soca-local_wordpress_1:/var/www/html/wp-content/mu-plugins/soca-fixture.php
+podman exec -u www-data soca-local_wordpress_1 php /tmp/wp-cli.phar config set SOCA_TEST_FIXTURES true --raw
+podman exec -u www-data soca-local_wordpress_1 php /tmp/wp-cli.phar eval-file /tmp/tests/fixture-setup.php
+podman cp tests/Caddyfile soca-local_https_1:/tmp/test-Caddyfile
+podman exec soca-local_https_1 caddy reload --config /tmp/test-Caddyfile --adapter caddyfile
 npm install --prefix work/browser --no-audit --no-fund playwright@1.56.1
 PLAYWRIGHT_PATH="$PWD/work/browser/node_modules/playwright" node tests/browser.cjs
 ```
 
-Set `CHROME_PATH` if Chrome is not `/usr/bin/google-chrome`. This **test browser only** ignores the disposable development certificate and maps the synthetic provider hostname to 127.0.0.1. Production plugin HTTPS verification is never disabled. The fixture transport runs only with both `OCIMD_TEST_FIXTURES=true` and a local environment. A full-page settings screenshot is saved under `work/` for inspection. Reset the fixture scenario and rate-limit transients between repeated browser runs if required. For a fresh run, remove test-created accounts or use a fresh database.
+Set `CHROME_PATH` if Chrome is not `/usr/bin/google-chrome`. This **test browser only** ignores the disposable development certificate and maps the synthetic provider hostname to 127.0.0.1. Production plugin HTTPS verification is never disabled. The fixture transport runs only with both `SOCA_TEST_FIXTURES=true` and a local environment. A full-page settings screenshot is saved under `work/` for inspection. Reset the fixture scenario and rate-limit transients between repeated browser runs if required. For a fresh run, remove test-created accounts or use a fresh database.
 
-Remove the test MU plugin and test constant, restore normal settings and reload `tools/Caddyfile` before using the installation for anything else. The simplest reliable cleanup of this **disposable** test project is `podman compose -p ocimd-local down --volumes` after stopping any additional test containers. Do not run that against a project whose data you want to keep.
+Remove the test MU plugin and test constant, restore normal settings and reload `tools/Caddyfile` before using the installation for anything else. The simplest reliable cleanup of this **disposable** test project is `podman compose -p soca-local down --volumes` after stopping any additional test containers. Do not run that against a project whose data you want to keep.
 
 ## Multisite suite
 
 Create a separate disposable WordPress database/container with the same plugin mounted and `WP_ENVIRONMENT_TYPE=local`. Install it at `https://network.company.com`, then:
 
 ```sh
-wp core multisite-convert --title='OAuth CIMD Network'
+wp core multisite-convert --title='SOCA Network'
 wp plugin activate simple-oauth-cimd-access --network
 wp eval-file /path/to/tests/multisite.php
 ```

@@ -1,6 +1,6 @@
 <?php
 /** Disposable-test MU plugin. NEVER include in a deployment ZIP. */
-if (!defined('OCIMD_TEST_FIXTURES') || !OCIMD_TEST_FIXTURES || wp_get_environment_type() !== 'local') { return; }
+if (!defined('SOCA_TEST_FIXTURES') || !SOCA_TEST_FIXTURES || wp_get_environment_type() !== 'local') { return; }
 add_action('plugins_loaded', static function () {
     class OCIMD_Mock_HTTP extends \OCIMD\Http {
         public function request(string $url, ?array $form=null, ?string $bearer=null): array {
@@ -35,7 +35,7 @@ add_action('plugins_loaded', static function () {
             throw new \OCIMD\Failure('fixture_url','Unknown fixture endpoint.');
         }
     }
-    add_filter('oauth_cimd_auth_http',static fn()=>new OCIMD_Mock_HTTP());
+    add_filter('soca_http',static fn()=>new OCIMD_Mock_HTTP());
     add_action('init',static function(){
         if(!isset($_GET['ocimd_fixture_authorize']))return;
         $record=[];foreach(['client_id','redirect_uri','code_challenge','nonce','state']as$key)$record[$key]=\OCIMD\Support::scalar($_GET,$key,16384);

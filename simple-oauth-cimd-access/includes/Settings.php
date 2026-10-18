@@ -6,7 +6,7 @@ final class Settings {
         try { $suggested = [Policy::domain($domain)]; } catch (Failure $e) { $suggested = []; }
         $ready = !Support::localHost($host) && wp_parse_url(home_url('/'), PHP_URL_SCHEME) === 'https' && (bool)$suggested;
         return ['enabled'=>$ready, 'automatic'=>false, 'provider'=>'RESOAuth', 'issuer'=>'https://auth.resoauth.cloud',
-            'button'=>'Continue with RESOAuth', 'scopes'=>'openid email profile', 'mode'=>Support::localHost($host)?'proxy':'self', 'key_mode'=>Support::localHost($host)?'inline':'uri', 'jwks_url'=>'',
+            'button'=>'Continue with SSO', 'scopes'=>'openid email profile', 'mode'=>Support::localHost($host)?'proxy':'self', 'key_mode'=>Support::localHost($host)?'inline':'uri', 'jwks_url'=>'',
             'proxy'=>'https://path2json.olliejc.workers.dev/%s/add_client_id/client.json', 'id_alg'=>'ES256', 'assertion_audience'=>'issuer',
             'cache_hours'=>24, 'create_users'=>false,
             'unrestricted'=>false, 'allow_domains'=>$suggested, 'allow_emails'=>[], 'deny_domains'=>[], 'deny_emails'=>[], 'revision'=>Support::random()];
