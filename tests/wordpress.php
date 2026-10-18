@@ -62,11 +62,12 @@ try {
         try { expect(Plugin::http() instanceof \OCIMD\Http && $calls===['legacy','soca']); }
         finally { remove_filter('soca_http',$current); remove_filter('oauth_cimd_auth_http',$legacy); }
     });
-    test('browser binding, single-use and encrypted transactions',function(){
-        global $wpdb;$state=Support::random();$b=Support::random();Store::createTransaction($state,['browser'=>hash('sha256',$b),'verifier'=>'confidential-verifier']);
+    test('single-use and encrypted transactions',function(){
+        global $wpdb;$state=Support::random();$ref='abcdef123456';$ua=hash('sha256','fixture-agent');Store::createTransaction($state,['verifier'=>'confidential-verifier','audit_ref'=>$ref,'purpose'=>'login','user_agent'=>$ua]);
         $raw=$wpdb->get_var($wpdb->prepare("SELECT payload FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state)));expect(!str_contains($raw,'confidential-verifier'));
-        rejects(fn()=>Store::consumeTransaction($state,'other'),'browser');expect(Store::consumeTransaction($state,$b)['verifier']==='confidential-verifier');rejects(fn()=>Store::consumeTransaction($state,$b),'state');
-        $state=Support::random();Store::createTransaction($state,['browser'=>hash('sha256',$b)]);$wpdb->update($wpdb->prefix.'ocimd_transactions',['expires'=>time()-1],['id'=>hash('sha256',$state)]);rejects(fn()=>Store::consumeTransaction($state,$b),'state');Store::clean();expect(!$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state))));
+        rejects(fn()=>Store::consumeTransaction($state,hash('sha256','different-agent')),'user_agent_mismatch');
+        expect(Store::consumeTransaction($state,$ua)['verifier']==='confidential-verifier');rejects(fn()=>Store::consumeTransaction($state,$ua),'state');
+        $state=Support::random();Store::createTransaction($state,['user_agent'=>$ua]);$wpdb->update($wpdb->prefix.'ocimd_transactions',['expires'=>time()-1],['id'=>hash('sha256',$state)]);rejects(fn()=>Store::consumeTransaction($state,$ua),'state');Store::clean();expect(!$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state))));
     });
     $ordinary=$make('soca-test-ordinary','ordinary@company.com');$admin=$make('soca-test-admin','privileged@company.com','administrator');
     $ordinary2=$make('soca-test-ordinary2','ordinary2@company.com');
@@ -106,7 +107,7 @@ try {
     $dup=$make('soca-test-duplicate','temporary@company.com');
     test('ambiguous local emails rejected',function()use($c,$s,$dup){global $wpdb;$wpdb->update($wpdb->users,['user_email'=>'ordinary2@company.com'],['ID'=>$dup]);try {$c['email']='ordinary2@company.com';$c['sub']='ambiguous-sub';rejects(fn()=>Identity::resolve($c,$s),'ambiguous_email');} finally {$wpdb->update($wpdb->users,['user_email'=>'temporary@company.com'],['ID'=>$dup]);clean_user_cache($dup);}});
     test('existing custom capabilities remain unchanged',function()use($ordinary2,$c,$s){$u=get_userdata($ordinary2);$u->add_cap('edit_posts');$c['sub']='wp-ordinary2';$c['email']='ordinary2@company.com';expect(Identity::resolve($c,$s)->ID===$ordinary2);expect(get_userdata($ordinary2)->has_cap('edit_posts'));$u->remove_cap('edit_posts');});
-    test('redacted audit keeps failure step, reason and reference',function(){Support::audit('login_failed',0,['flow'=>'login','step'=>'token_exchange','reason'=>'token_http_status','ref'=>'abcdef123456','http_status'=>401,'email'=>'secret@company.com','token'=>'access_token']);$log=get_option('ocimd_audit');$last=end($log);expect($last['event']==='login_failed' && $last['step']==='token_exchange' && $last['reason']==='token_http_status' && $last['ref']==='abcdef123456' && $last['http_status']===401);$json=Support::json($log);expect(!str_contains($json,'@company.com') && !str_contains($json,'wp-test-1') && !str_contains($json,'access_token'));});
+    test('redacted audit keeps failure step, reason and reference',function(){Support::audit('login_started',0,['flow'=>'login','ref'=>'abcdef123456']);Support::audit('login_failed',0,['flow'=>'login','step'=>'token_exchange','reason'=>'token_http_status','ref'=>'abcdef123456','http_status'=>401,'email'=>'secret@company.com','token'=>'access_token']);$log=get_option('ocimd_audit');$last=end($log);expect($last['event']==='login_failed' && $last['step']==='token_exchange' && $last['reason']==='token_http_status' && $last['ref']==='abcdef123456' && $last['http_status']===401);$json=Support::json($log);expect(!str_contains($json,'@company.com') && !str_contains($json,'wp-test-1') && !str_contains($json,'access_token'));});
     test('public metadata exposes public keys only and no access policy',function(){ $d=Metadata::document(Settings::get(),true);Metadata::noPrivateKeys($d);$j=Support::json($d);expect(!str_contains($j,'allow_domains') && !str_contains($j,'PRIVATE KEY')); });
 } finally {
     require_once ABSPATH.'wp-admin/includes/user.php';

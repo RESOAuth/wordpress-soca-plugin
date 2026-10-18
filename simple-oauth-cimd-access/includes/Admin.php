@@ -5,14 +5,14 @@ final class Admin {
         add_action('admin_menu', static function () { add_options_page('SOCA - Simple OAuth CIMD Access','SOCA','manage_options','simple-oauth-cimd-access',[self::class,'page']); });
         add_action('admin_enqueue_scripts', static function ($hook) {
             if ($hook==='settings_page_simple-oauth-cimd-access') {
-                wp_enqueue_script('soca-admin',plugins_url('assets/admin.js',SOCA_FILE),[], '0.0.3',true);
-                wp_enqueue_style('soca-admin',plugins_url('assets/admin.css',SOCA_FILE),[], '0.0.3');
+                wp_enqueue_script('soca-admin',plugins_url('assets/admin.js',SOCA_FILE),[], '0.0.5',true);
+                wp_enqueue_style('soca-admin',plugins_url('assets/admin.css',SOCA_FILE),[], '0.0.5');
             }
         });
         add_filter('site_status_tests',static function ($tests) { $tests['direct']['soca']=['label'=>'SOCA','test'=>[self::class,'health']]; return $tests; });
         add_filter('debug_information',static function ($info) {
             $s=Settings::get(); $info['soca']=['label'=>'SOCA - Simple OAuth CIMD Access','fields'=>[
-                'version'=>['label'=>'Version','value'=>'0.0.3'], 'mode'=>['label'=>'Metadata mode','value'=>$s['mode']],
+                'version'=>['label'=>'Version','value'=>'0.0.5'], 'mode'=>['label'=>'Metadata mode','value'=>$s['mode']],
                 'enabled'=>['label'=>'Enabled','value'=>$s['enabled'] && !Settings::disabled()?'yes':'no'],
                 'cron'=>['label'=>'Maintenance','value'=>wp_next_scheduled('soca_maintenance')?'scheduled':'missing']]]; return $info;
         });
@@ -113,6 +113,6 @@ final class Admin {
         echo '<h2>Operations</h2><p>Signing keys rotate weekly after the replacement has been published for the cache safety window. Old keys remain for the window plus 12 minutes. A missed cron or unreachable mirror delays rotation. Keep WordPress salts stable, protect database backups, and run <code>wp soca maintain</code> hourly using real cron on low-traffic sites.</p>';
         echo '<p>To recover, use the recovery URL above, <code>wp soca disable</code>, or set <code>define(\'SOCA_DISABLED\', true);</code> in wp-config.php. A failed login shows a reference that matches a redacted audit event below. Logout ends the WordPress session only.</p>';
         try { echo '<details><summary>Key publication and maintenance details</summary><pre>' . esc_html(json_encode(Plugin::status(),JSON_PRETTY_PRINT)) . '</pre></details>'; } catch (\Throwable $e) { echo '<p>Cannot read keys. Restore encryption configuration from backup.</p>'; }
-        echo '<details><summary>Recent redacted audit events (last 100)</summary><p>Match the reference from the login page to a <code>login_failed</code> event. Its flow, step and reason identify where the attempt stopped. HTTP status or cURL error numbers appear when available. Events contain no email, subject, token or provider response body.</p><pre>' . esc_html(json_encode(get_option('ocimd_audit',[]),JSON_PRETTY_PRINT)) . '</pre></details></div>';
+        echo '<details><summary>Recent redacted audit events (last 100)</summary><p>Match the reference from the login page to a <code>login_failed</code> event. Its flow, step and reason identify where the attempt stopped. HTTP status or cURL error numbers appear when available. A <code>transaction</code> failure occurs before token exchange; <code>token_exchange</code> and later steps show how far the callback progressed. Events contain no email, subject, token or provider response body.</p><pre>' . esc_html(json_encode(get_option('ocimd_audit',[]),JSON_PRETTY_PRINT)) . '</pre></details></div>';
     }
 }

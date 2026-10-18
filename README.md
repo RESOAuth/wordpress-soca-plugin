@@ -2,7 +2,7 @@
 
 SOCA (Simple OAuth CIMD Access) is an open-source WordPress single sign-on plugin built and supported by RESOAuth® that can use another compatible configured provider. It uses OIDC authorization code + PKCE S256, `private_key_jwt` ES256, and self-hosted or proxy Client ID Metadata Documents (CIMD). It does **not** make WordPress an authorization server.
 
-Install `dist/simple-oauth-cimd-access-0.0.3.zip` using **Plugins → Add Plugin → Upload Plugin**, activate it, then open **Settings → SOCA**. PHP 8.1+, OpenSSL, cURL, and WordPress 6.8+ are required. The release contains its isolated JWT dependency; Composer is not needed on the WordPress server.
+Install `dist/simple-oauth-cimd-access-0.0.5.zip` using **Plugins → Add Plugin → Upload Plugin**, activate it, then open **Settings → SOCA**. PHP 8.1+, OpenSSL, cURL, and WordPress 6.8+ are required. The release contains its isolated JWT dependency; Composer is not needed on the WordPress server.
 
 When upgrading from the old `oauth-cimd-auth` folder, install the new ZIP, deactivate **OAuth CIMD Auth**, then activate **SOCA**. Both folders must not run together. Existing site settings and encrypted keys are retained under their original internal database names. Old issuer/subject binding rows are left in place for backup compatibility but are no longer used for login. The internal `OCIMD` PHP namespace and `ocimd_*` storage names remain for compatibility. Check the new client metadata URL and complete a fresh test login before removing the old folder.
 
@@ -97,6 +97,8 @@ wp soca disable # disable upstream button/automatic mode
 The earlier `wp oauth-cimd` command remains an alias for existing jobs; use `wp soca` in new scripts.
 
 On multisite, always select the site with `--url`. Settings, policy, encrypted keys and transactions are isolated per site. New sites initialize lazily on first request. Site Health reports missing/stale maintenance and overdue rotation; its debug export excludes secrets. Web-server/proxy logs should omit callback query strings because authorization responses contain short-lived codes and state. A failed login shows a 12-character reference; find the matching `login_failed` event in **Settings → SOCA → Recent redacted audit events** or `wp soca audit`. Its `step` and `reason` show where the attempt stopped; outbound failures also include an HTTP status or cURL error number when available. The audit never records emails, subjects, passwords, raw provider errors or tokens.
+
+SOCA does not set a temporary login cookie. The callback checks the User-Agent, consumes the one-time database transaction, exchanges the code, validates the signed ID token and verified email, then issues normal WordPress authentication cookies. Audit events identify failed steps and reasons, including `user_agent_mismatch`. Matching User-Agents do not prove the same browser; see [SECURITY.md](docs/SECURITY.md).
 
 Theme integration:
 

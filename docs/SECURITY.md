@@ -8,7 +8,7 @@ This document describes the implemented profile, not a formal certification or s
 | --- | --- | --- |
 | User identity | OIDC Core defines authentication; OAuth alone does not | Require OIDC, exact configured issuer, subject types, code response, verified email in ID token or subject-matched UserInfo. No OAuth-only identity inference. |
 | PKCE and request correlation | OAuth 2.1 draft 16, RFC 9700 and RFC 7636 | Always S256, including confidential requests; also independent 256-bit state and nonce. Require advertised S256. |
-| Transactions | CSRF, replay and mix-up protection | Ten-minute encrypted server-side record, independent `__Host-` Secure/HttpOnly/SameSite=Lax browser cookie (no Domain attribute, path `/`), atomic delete-on-consume. Snapshot issuer, endpoints, client ID, callback, nonce, verifier, key ID and settings. A settings save invalidates pending transactions. |
+| Transactions | Replay and mix-up protection; partial browser check | Ten-minute encrypted server-side record keyed by random state, atomic delete-on-consume. Snapshot issuer, endpoints, client ID, callback, nonce, verifier, key ID, settings and a hash of the server-observed User-Agent. A settings save invalidates pending transactions. No SOCA transaction cookie is set. |
 | Client authentication | RFC 7523 and OIDC private_key_jwt | ES256/P-256 only, `iss=sub=client_id`, audience the configured provider issuer or its exact discovered token endpoint, random `jti`, 60-second expiry. The audience is snapshotted with the transaction. Require advertised private_key_jwt and ES256. No client secrets or downgrade. |
 | Token signatures | OIDC Core, RFC 8725, RFC 7517 | Administrator pins ES256 or RS256 for ID tokens. Require `kid`; reject duplicate matching keys, `none`, HMAC, remote/embedded header keys, critical JOSE extensions and non-JWT `typ`. Use only the pinned issuer's discovered JWKS; never client signing keys. |
 | ID token claims | OIDC Core §3.1.3.7 | Exact issuer, nonempty ASCII subject ≤255 bytes, audience membership, `azp` required with multiple audiences and checked whenever present, exact nonce, signature, expiry, future `iat`/`nbf`, and hashes when present. 60-second clock tolerance, integer times, `iat` no earlier than transaction start minus tolerance, lifetime ≤24 hours. These last age/type bounds are stricter choices. |
@@ -51,7 +51,11 @@ Account creation uses a random local password and the Subscriber role. A failed 
 
 Every login requires a valid, verified email from the pinned provider and applies the current deny and allow rules. The email selects the matching local account, including an administrator, on every login; existing local emails, roles and capabilities are not changed. A compromised or weakly verified upstream address can grant the matched WordPress role. The subject remains mandatory and validated for OIDC, including UserInfo consistency, but it is not used as a local account key. Account creation is a separate opt-in. Rate limits are per ten-minute HMAC of the server-observed IP (30 login starts); they do not trust arbitrary forwarded IP headers. Shared reverse proxies may share a limit. Apply your normal WordPress login/edge rate controls as well.
 
-Each site's options, encryption context, metadata URLs, transaction table/cookie prefix and admission rules are independent. Network-wide users are never silently added to another site. Removing a user from one site prevents matching that account on that site. Deactivation and uninstall retain plugin data by default.
+Each site's options, encryption context, metadata URLs, transaction table and admission rules are independent. Network-wide users are never silently added to another site. Removing a user from one site prevents matching that account on that site. Deactivation and uninstall retain plugin data by default.
+
+## Cookie-free callback limitation
+
+The callback requires the same server-observed User-Agent as the login start. This is a best-effort check: another browser with the same User-Agent can still use an unused callback URL to sign in as the initiator (login CSRF). IP is not bound because the site may sit behind a proxy and client IPs can change during login. WordPress sets its normal authentication cookies after a successful login.
 
 ## Data and extension boundaries
 
