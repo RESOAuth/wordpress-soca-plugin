@@ -1,0 +1,15 @@
+{
+  "require": {
+    "firebase/php-jwt": "7.2.1",
+    "php": ">=8.1",
+    "ext-openssl": "*",
+    "ext-curl": "*"
+  },
+  "config": {
+    "allow-plugins": false
+  },
+  "name": "olliejc/simple-oauth-cimd-access",
+  "type": "wordpress-plugin",
+  "license": "AGPL-3.0-only",
+  "description": "SOCA: Simple OAuth CIMD Access for WordPress"
+}

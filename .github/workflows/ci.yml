@@ -1,0 +1,88 @@
+name: Test and package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protocol:
+    name: Protocol and syntax (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.3']
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Protocol tests and PHP syntax
+        run: |
+          docker run --rm -v "$PWD:/app:ro" -w /app "php:${{ matrix.php }}-cli" sh -ec '
+            php tests/protocol.php
+            find simple-oauth-cimd-access -name "*.php" -exec php -l {} \;
+          '
+      - name: JavaScript syntax
+        run: node --check simple-oauth-cimd-access/assets/admin.js
+
+  wordpress:
+    name: WordPress integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Start disposable WordPress and MariaDB
+        run: |
+          docker compose -p soca-ci up -d db wordpress
+          for attempt in $(seq 1 30); do
+            if docker compose -p soca-ci exec -T wordpress test -f /var/www/html/wp-includes/version.php; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Install WordPress and run integration tests
+        run: |
+          docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp core install \
+            --url=https://localhost:8443 --title='SOCA CI' \
+            --admin_user=localadmin --admin_password='Local-fixture-password-749!' \
+            --admin_email=admin@company.com --skip-email
+          docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp plugin activate simple-oauth-cimd-access
+          docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp eval-file /tests/wordpress.php
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose -p soca-ci logs --tail=100
+      - name: Remove disposable installation
+        if: always()
+        run: docker compose -p soca-ci down --volumes
+
+  package:
+    name: Release ZIP and dependency inventory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check release and vendored dependency versions
+        run: python3 tools/check_release.py
+      - name: Validate Composer manifest and advisories
+        run: |
+          docker run --rm -v "$PWD:/app" -w /app composer:2 validate
+          docker run --rm -v "$PWD:/app" -w /app composer:2 audit --locked
+      - name: Build and inspect installable ZIP
+        run: |
+          python3 tools/build.py
+          cd dist
+          sha256sum -c SHA256SUMS
+          unzip -t simple-oauth-cimd-access-0.0.1.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: soca-0.0.1
+          path: |
+            dist/simple-oauth-cimd-access-0.0.1.zip
+            dist/SHA256SUMS
+          if-no-files-found: error

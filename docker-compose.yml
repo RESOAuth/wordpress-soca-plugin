@@ -1,0 +1,55 @@
+services:
+  db:
+    image: docker.io/library/mariadb:11.4
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: local-wordpress-only
+      MARIADB_ROOT_PASSWORD: local-root-only
+    volumes:
+      - database:/var/lib/mysql
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  wordpress:
+    image: docker.io/library/wordpress:7.1.3-php8.3-apache
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: &wordpress_environment
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: local-wordpress-only
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_CONFIG_EXTRA: |
+        if (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && $$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') { $$_SERVER['HTTPS'] = 'on'; }
+        define('WP_HOME', 'https://localhost:8443');
+        define('WP_SITEURL', 'https://localhost:8443');
+        define('WP_ENVIRONMENT_TYPE', 'local');
+    volumes:
+      - wordpress:/var/www/html
+      - ./simple-oauth-cimd-access:/var/www/html/wp-content/plugins/simple-oauth-cimd-access:ro
+  https:
+    image: docker.io/library/caddy:2.10
+    ports:
+      - 127.0.0.1:8443:443
+    volumes:
+      - ./tools/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - wordpress
+  cli:
+    image: docker.io/library/wordpress:cli-php8.3
+    profiles: [tools]
+    user: '33:33'
+    environment: *wordpress_environment
+    volumes:
+      - wordpress:/var/www/html
+      - ./simple-oauth-cimd-access:/var/www/html/wp-content/plugins/simple-oauth-cimd-access:ro
+      - ./tests:/tests:ro
+volumes:
+  database:
+  wordpress:
+  caddy_data:
