@@ -24,7 +24,7 @@ See the bundled README.md, SECURITY.md and STANDARDS.md for setup, protocol choi
 
 == Frequently Asked Questions ==
 = How do I recover local administrator access? =
-Use /wp-login.php?oauth_cimd_local=1. This skips automatic navigation only. You must still authenticate. Set SOCA_DISABLED=true in wp-config.php or run wp soca disable for emergency recovery.
+Use /wp-login.php?soca_local=1. This skips automatic navigation only. You must still authenticate. Set SOCA_DISABLED=true in wp-config.php or run wp soca disable for emergency recovery.
 
 = Does proxy mode expose private keys? =
 No. Only public metadata and public keys are encoded. Proxy + inline key rotation changes client_id and can change pairwise subjects. Use a stable public JWKS URL for stable client identity.

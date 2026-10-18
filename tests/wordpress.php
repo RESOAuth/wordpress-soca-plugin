@@ -27,12 +27,34 @@ try {
     });
     test('WordPress tables installed and keys encrypted without autoload',function(){global $wpdb;expect((int)get_option('ocimd_schema')===1);expect(count(Keys::get()['items'])===2);$row=$wpdb->get_row("SELECT option_value,autoload FROM {$wpdb->options} WHERE option_name='ocimd_keys'",ARRAY_A);expect(!str_contains($row['option_value'],'PRIVATE KEY'));expect(in_array($row['autoload'],['off','no','auto-off'],true));});
     test('new callback hook is registered and profile identity controls are absent',function(){
-        expect(plugin_basename(OCIMD_FILE)==='simple-oauth-cimd-access/simple-oauth-cimd-access.php');
+        expect(plugin_basename(SOCA_FILE)==='simple-oauth-cimd-access/simple-oauth-cimd-access.php');
+        expect(OCIMD_FILE===SOCA_FILE);
         expect(function_exists('soca_button'));
+        expect(wp_next_scheduled('soca_maintenance')!==false);
         expect(has_action('admin_post_nopriv_soca_start',[Plugin::class,'start'])!==false);
         expect(has_action('admin_post_nopriv_soca_callback',[Plugin::class,'callback'])!==false);
         expect(has_action('admin_post_nopriv_oauthcimd_callback')===false);
         expect(has_action('show_user_profile',[\OCIMD\Admin::class,'profile'])===false);
+    });
+    test('SOCA recovery URLs and legacy error links remain usable',function(){
+        $url=Plugin::recoveryUrl(true);
+        expect(str_contains($url,'soca_local=1') && str_contains($url,'soca_error=1') && !str_contains($url,'oauth_cimd_'));
+        $original=$_GET;
+        try {
+            $_GET=['soca_error'=>'1'];
+            expect(str_contains(apply_filters('login_message',''),'SOCA login did not complete.'));
+            $_GET=['oauth_cimd_error'=>'1'];
+            expect(str_contains(apply_filters('login_message',''),'SOCA login did not complete.'));
+        } finally { $_GET=$original; }
+    });
+    test('SOCA HTTP filter runs after the legacy integration filter',function(){
+        $calls=[];
+        $legacy=static function($http) use (&$calls) { $calls[]='legacy'; return $http; };
+        $current=static function($http) use (&$calls) { $calls[]='soca'; return $http; };
+        add_filter('oauth_cimd_auth_http',$legacy);
+        add_filter('soca_http',$current);
+        try { expect(Plugin::http() instanceof \OCIMD\Http && $calls===['legacy','soca']); }
+        finally { remove_filter('soca_http',$current); remove_filter('oauth_cimd_auth_http',$legacy); }
     });
     test('browser binding, single-use and encrypted transactions',function(){
         global $wpdb;$state=Support::random();$b=Support::random();Store::createTransaction($state,['browser'=>hash('sha256',$b),'verifier'=>'confidential-verifier']);
@@ -40,7 +62,7 @@ try {
         rejects(fn()=>Store::consumeTransaction($state,'other'),'browser');expect(Store::consumeTransaction($state,$b)['verifier']==='confidential-verifier');rejects(fn()=>Store::consumeTransaction($state,$b),'state');
         $state=Support::random();Store::createTransaction($state,['browser'=>hash('sha256',$b)]);$wpdb->update($wpdb->prefix.'ocimd_transactions',['expires'=>time()-1],['id'=>hash('sha256',$state)]);rejects(fn()=>Store::consumeTransaction($state,$b),'state');Store::clean();expect(!$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state))));
     });
-    $ordinary=$make('ocimd-test-ordinary','ordinary@company.com');$admin=$make('ocimd-test-admin','privileged@company.com','administrator');
+    $ordinary=$make('soca-test-ordinary','ordinary@company.com');$admin=$make('soca-test-admin','privileged@company.com','administrator');
     test('access-rule test keeps its explanation beside the form',function()use($admin){
         $settings=Settings::get(); $originalUser=get_current_user_id(); $originalPost=$_POST; $originalRequest=$_REQUEST; $originalMethod=$_SERVER['REQUEST_METHOD']??null; $bufferLevel=ob_get_level();
         try {
@@ -51,15 +73,16 @@ try {
             $_REQUEST=$_POST;
             ob_start(); \OCIMD\Admin::page(); $html=ob_get_clean();
             expect(str_contains($html,'SOCA - Simple OAuth CIMD Access'));
-            expect(str_contains($html,'id="ocimd-access-rules"') && str_contains($html,'href="#ocimd-access-rules"'));
-            expect(str_contains($html,'action="#ocimd-access-test"') && str_contains($html,'value="ordinary@company.com"'));
-            $result=strpos($html,'id="ocimd-policy-result"'); $input=strpos($html,'id="test_email"'); $operations=strpos($html,'<h2>Operations</h2>');
+            expect(str_contains($html,'soca_local=1') && !str_contains($html,'oauth_cimd_local'));
+            expect(str_contains($html,'id="soca-access-rules"') && str_contains($html,'href="#soca-access-rules"'));
+            expect(str_contains($html,'action="#soca-access-test"') && str_contains($html,'value="ordinary@company.com"'));
+            $result=strpos($html,'id="soca-policy-result"'); $input=strpos($html,'id="test_email"'); $operations=strpos($html,'<h2>Operations</h2>');
             expect($result!==false && $input!==false && $operations!==false && $input<$result && $result<$operations);
             expect(str_contains($html,'Allowed for ordinary@company.com: Exact domain allow rule matches'));
             $configured['deny_emails']=['ordinary@company.com']; update_option('ocimd_settings',$configured,false);
             ob_start(); \OCIMD\Admin::page(); $denied=ob_get_clean();
             expect(str_contains($denied,'Denied for ordinary@company.com: Email deny rule wins'));
-            expect(strpos($denied,'id="ocimd-policy-result"')>strpos($denied,'id="test_email"'));
+            expect(strpos($denied,'id="soca-policy-result"')>strpos($denied,'id="test_email"'));
         } finally {
             while (ob_get_level()>$bufferLevel) { ob_end_clean(); }
             update_option('ocimd_settings',$settings,false); wp_set_current_user($originalUser); $_POST=$originalPost; $_REQUEST=$originalRequest;
@@ -70,11 +93,11 @@ try {
     test('identity stays with original user after verified email change',function()use($c,$s,$ordinary){$changed=$c;$changed['email']='changed@company.com';expect(Identity::resolve($changed,$s)->ID===$ordinary);expect(get_userdata($ordinary)->user_email==='ordinary@company.com');});
     test('pairwise-subject changes cannot silently relink by email',function()use($c,$s){$changed=$c;$changed['sub']='wp-test-changed';rejects(fn()=>Identity::resolve($changed,$s),'silent_relink');});
     test('verified email also links an administrator by default',function()use($c,$s,$admin){$c['email']='privileged@company.com';$c['sub']='wp-admin-sub';expect(Identity::resolve($c,$s)->ID===$admin);expect(in_array('administrator',get_userdata($admin)->roles,true));});
-    $ordinary2=$make('ocimd-test-ordinary2','ordinary2@company.com');
+    $ordinary2=$make('soca-test-ordinary2','ordinary2@company.com');
     test('verified email matches another ordinary account',function()use($c,$s,$ordinary2){$c['sub']='wp-ordinary2';$c['email']='ordinary2@company.com';expect(Identity::resolve($c,$s)->ID===$ordinary2);});
     test('registration off; explicit controlled creation is subscriber only',function()use($c,$s,&$created){$c['sub']='wp-new';$c['email']='new@company.com';rejects(fn()=>Identity::resolve($c,$s),'registration_disabled');$s['create_users']=true;$c['role']='administrator';$c['roles']=['administrator'];$u=Identity::resolve($c,$s);$created[]=$u->ID;expect($u->roles===['subscriber']);});
     test('email_verified must be boolean true and denial still applies to linked identity',function()use($c,$s){$c['email_verified']='true';rejects(fn()=>Identity::resolve($c,$s),'access_denied');$c['email_verified']=true;$s['deny_domains']=['company.com'];rejects(fn()=>Identity::resolve($c,$s),'access_denied');});
-    $dup=$make('ocimd-test-duplicate','temporary@company.com');
+    $dup=$make('soca-test-duplicate','temporary@company.com');
     test('ambiguous local emails rejected',function()use($c,$s,$dup){global $wpdb;$wpdb->update($wpdb->users,['user_email'=>'ordinary2@company.com'],['ID'=>$dup]);$c['email']='ordinary2@company.com';$c['sub']='ambiguous-sub';rejects(fn()=>Identity::resolve($c,$s),'ambiguous_email');});
     test('existing custom capabilities remain unchanged',function()use($ordinary2,$c,$s){$u=get_userdata($ordinary2);$u->add_cap('edit_posts');$c['sub']='wp-ordinary2';$c['email']='ordinary2@company.com';expect(Identity::resolve($c,$s)->ID===$ordinary2);expect(get_userdata($ordinary2)->has_cap('edit_posts'));$u->remove_cap('edit_posts');});
     test('unlink is scoped to local user',function()use($ordinary,$admin){$rows=Identity::forUser($ordinary);Identity::unlink($admin,$rows[0]['identity_hash']);expect(count(Identity::forUser($ordinary))===1);Identity::unlink($ordinary,$rows[0]['identity_hash']);expect(count(Identity::forUser($ordinary))===0);});

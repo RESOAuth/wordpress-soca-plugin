@@ -17,7 +17,8 @@ if (class_exists('OCIMD\\Plugin', false)) {
     });
     return;
 }
-define('OCIMD_FILE', __FILE__);
+define('SOCA_FILE', __FILE__);
+define('OCIMD_FILE', SOCA_FILE); // Preserve existing integrations.
 require_once __DIR__ . '/vendor/autoload.php';
 foreach (['Support', 'Policy', 'Settings', 'Http', 'Store', 'Keys', 'Metadata', 'Provider', 'Identity', 'Plugin', 'Admin'] as $file) {
     require_once __DIR__ . '/includes/' . $file . '.php';

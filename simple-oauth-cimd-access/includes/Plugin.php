@@ -11,11 +11,12 @@ final class Plugin {
         add_action('login_form', static function () { echo self::button(Support::scalar($_GET, 'redirect_to')); });
         add_action('login_init', [self::class,'automatic']);
         add_filter('login_message', static function ($message) {
-            if (isset($_GET['oauth_cimd_error'])) { $message .= '<p class="message">Upstream login did not complete. You can retry or use your local account. An administrator can review the redacted audit events.</p>'; }
+            if (isset($_GET['soca_error']) || isset($_GET['oauth_cimd_error'])) { $message .= '<p class="message">SOCA login did not complete. You can retry or use your local account. An administrator can review the redacted audit events.</p>'; }
             return $message;
         });
-        add_filter('logout_redirect', static fn($url)=>add_query_arg('oauth_cimd_local','1',wp_login_url()), 99);
-        add_action('ocimd_maintenance', [self::class,'maintenance']);
+        add_filter('logout_redirect', static fn($url)=>self::recoveryUrl(), 99);
+        add_action('soca_maintenance', [self::class,'maintenance']);
+        add_action('ocimd_maintenance', [self::class,'maintenance']); // Existing scheduled events.
         add_action('deleted_user', [self::class,'deletedUser']);
         add_action('remove_user_from_blog', [self::class,'removedUser'], 10, 2);
         Admin::boot();
@@ -23,7 +24,7 @@ final class Plugin {
             $cli = static function ($args) {
                 $command = $args[0] ?? 'status';
                 try {
-                    if ($command === 'disable') { $s=Settings::get(); $s['enabled']=false; $s['automatic']=false; $s['revision']=Support::random(); update_option('ocimd_settings',$s,false); \WP_CLI::success('Upstream login disabled.'); }
+                    if ($command === 'disable') { $s=Settings::get(); $s['enabled']=false; $s['automatic']=false; $s['revision']=Support::random(); update_option('ocimd_settings',$s,false); \WP_CLI::success('SOCA login disabled.'); }
                     elseif ($command === 'check') { \WP_CLI::log(Support::json(self::check())); }
                     elseif ($command === 'maintain') { self::maintenance(); \WP_CLI::log(Support::json(get_option('ocimd_maintenance_status',[]))); }
                     elseif ($command === 'status') { \WP_CLI::log(Support::json(self::status())); }
@@ -38,7 +39,7 @@ final class Plugin {
                         Identity::unlink($user,$rows[0]['identity_hash']);
                         \WP_CLI::success('Binding for the configured issuer removed. A fresh verified-email login may link this account again.');
                     }
-                    else { \WP_CLI::error('Commands: status, check, maintain, disable, jwks, audit, unlink USER_ID. Select a multisite site using --url.'); }
+                    else { \WP_CLI::error('Usage: wp soca <status|check|maintain|disable|jwks|audit|unlink USER_ID>. Select a multisite site using --url.'); }
                 } catch (\Throwable $e) { \WP_CLI::error($e instanceof Failure ? $e->getMessage() : 'Internal failure; inspect the runtime configuration.'); }
             };
             \WP_CLI::add_command('soca', $cli);
@@ -46,10 +47,14 @@ final class Plugin {
         }
     }
     /** Dependency injection for trusted WordPress integrations and deterministic protocol fixtures. */
-    public static function http(): Http { return apply_filters('oauth_cimd_auth_http', new Http()); }
+    public static function http(): Http {
+        $http = apply_filters('oauth_cimd_auth_http', new Http());
+        return apply_filters('soca_http', $http);
+    }
     public static function initialize(): void {
         if (!get_option('ocimd_schema')) { Store::install(); }
-        if (!wp_next_scheduled('ocimd_maintenance')) { wp_schedule_event(time()+60, 'hourly', 'ocimd_maintenance'); }
+        if (wp_next_scheduled('ocimd_maintenance')) { wp_clear_scheduled_hook('ocimd_maintenance'); }
+        if (!wp_next_scheduled('soca_maintenance')) { wp_schedule_event(time()+60, 'hourly', 'soca_maintenance'); }
     }
     public static function activate(bool $network = false): void {
         if (!extension_loaded('openssl') || !extension_loaded('curl')) { wp_die('SOCA requires PHP OpenSSL and cURL.'); }
@@ -58,8 +63,8 @@ final class Plugin {
     }
     public static function deactivate(bool $network = false): void {
         if ($network && is_multisite()) {
-            foreach (get_sites(['fields'=>'ids','number'=>0]) as $id) { switch_to_blog($id); wp_clear_scheduled_hook('ocimd_maintenance'); restore_current_blog(); }
-        } else { wp_clear_scheduled_hook('ocimd_maintenance'); }
+            foreach (get_sites(['fields'=>'ids','number'=>0]) as $id) { switch_to_blog($id); wp_clear_scheduled_hook('soca_maintenance'); wp_clear_scheduled_hook('ocimd_maintenance'); restore_current_blog(); }
+        } else { wp_clear_scheduled_hook('soca_maintenance'); wp_clear_scheduled_hook('ocimd_maintenance'); }
     }
     public static function deletedUser(int $id): void {
         global $wpdb;
@@ -91,6 +96,11 @@ final class Plugin {
         $s = Settings::get(); if (!$s['enabled'] || Settings::disabled()) { return ''; }
         $url = Support::query(admin_url('admin-post.php'), ['action'=>'soca_start','redirect_to'=>Support::destination($destination)]);
         return '<p class="soca-login"><a class="button button-secondary" href="' . esc_url($url) . '">' . esc_html($s['button']) . '</a></p>';
+    }
+    public static function recoveryUrl(bool $error = false): string {
+        $args = ['soca_local'=>'1'];
+        if ($error) { $args['soca_error'] = '1'; }
+        return add_query_arg($args, wp_login_url());
     }
     public static function automatic(): void {
         $s = Settings::get();
@@ -125,7 +135,7 @@ final class Plugin {
         $s=Settings::get(); $k=Keys::get();
         return ['enabled'=>$s['enabled'] && !Settings::disabled(),'mode'=>$s['mode'],'key_mode'=>$s['key_mode'],'active_kid'=>$k['active'],
             'active_since'=>$k['since'],'public_keys'=>array_map(static fn($x)=>array_intersect_key($x,array_flip(['kid','published','retired'])), $k['items']),
-            'maintenance'=>get_option('ocimd_maintenance_status',[]),'next_cron'=>wp_next_scheduled('ocimd_maintenance'),
+            'maintenance'=>get_option('ocimd_maintenance_status',[]),'next_cron'=>wp_next_scheduled('soca_maintenance'),
             'inline_identity_changes'=>$s['mode']==='proxy' && $s['key_mode']==='inline'];
     }
     private static function cookieName(string $state): string { return '__Host-ocimd_' . get_current_blog_id() . '_' . substr(hash('sha256',$state),0,16); }
@@ -194,6 +204,6 @@ final class Plugin {
     }
     private static function fail(\Throwable $e): void {
         Support::audit($e instanceof Failure?$e->reason:'internal_error');
-        wp_safe_redirect(add_query_arg(['oauth_cimd_local'=>'1','oauth_cimd_error'=>'1'],wp_login_url())); exit;
+        wp_safe_redirect(self::recoveryUrl(true)); exit;
     }
 }

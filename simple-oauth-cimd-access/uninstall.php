@@ -6,6 +6,7 @@ $ocimdSites = is_multisite() ? get_sites(['fields'=>'ids','number'=>0]) : [get_c
 foreach ($ocimdSites as $ocimdSite) {
     if (is_multisite()) { switch_to_blog($ocimdSite); }
     global $wpdb;
+    wp_clear_scheduled_hook('soca_maintenance');
     wp_clear_scheduled_hook('ocimd_maintenance');
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}ocimd_identities");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}ocimd_transactions");

@@ -1,6 +1,6 @@
 'use strict';
 // Progressive enhancement: the textarea remains the submitted, server-validated source.
-document.querySelectorAll('.ocimd-policy').forEach((box) => {
+document.querySelectorAll('.soca-policy').forEach((box) => {
   const source = box.querySelector('textarea');
   const kind = box.dataset.kind;
   const editor = document.createElement('div');
@@ -11,7 +11,7 @@ document.querySelectorAll('.ocimd-policy').forEach((box) => {
   const add = document.createElement('button'); add.type = 'button'; add.textContent = 'Add'; add.className = 'button';
   const feedback = document.createElement('p'); feedback.id = source.id + '-feedback'; feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite');
   input.setAttribute('aria-describedby', feedback.id);
-  const chips = document.createElement('ul'); chips.className = 'ocimd-chips';
+  const chips = document.createElement('ul'); chips.className = 'soca-chips';
   const domain = (s) => s.length <= 253 && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(s) && !/(^|\.)(localhost|local|test|invalid|example|internal|lan|home|localdomain)$/.test(s) && !s.endsWith('.home.arpa');
   const valid = (s) => kind === 'domain' ? domain(s) : s.length <= 254 && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+$/.test(s) && domain(s.split('@')[1]);
   let entries = source.value.split(/[,;\s]+/).filter(Boolean);
@@ -47,7 +47,7 @@ document.querySelectorAll('.ocimd-policy').forEach((box) => {
 const allowAny = document.querySelector('input[name="unrestricted"]');
 if (allowAny) {
   const syncAllowLists = () => {
-    document.querySelectorAll('.ocimd-policy[data-policy="allow"]').forEach((box) => {
+    document.querySelectorAll('.soca-policy[data-policy="allow"]').forEach((box) => {
       box.hidden = allowAny.checked;
       box.querySelectorAll('input, textarea, button').forEach((control) => { control.disabled = allowAny.checked; });
     });
@@ -55,8 +55,8 @@ if (allowAny) {
   allowAny.addEventListener('change', syncAllowLists);
   syncAllowLists();
 }
-const accessTest = document.querySelector('#ocimd-access-test-form');
-const accessResult = document.querySelector('#ocimd-policy-result');
+const accessTest = document.querySelector('#soca-access-test-form');
+const accessResult = document.querySelector('#soca-policy-result');
 if (accessTest && accessResult) {
   accessTest.querySelectorAll('input[name="test_email"], input[name="verified"]').forEach((input) => {
     input.addEventListener('input', () => { accessResult.hidden = true; });
