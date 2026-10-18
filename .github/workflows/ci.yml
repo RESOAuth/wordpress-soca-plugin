@@ -80,11 +80,11 @@ jobs:
           python3 tools/build.py
           cd dist
           sha256sum -c SHA256SUMS
-          unzip -t simple-oauth-cimd-access-0.0.1.zip
+          unzip -t simple-oauth-cimd-access-0.0.2.zip
       - uses: actions/upload-artifact@v7
         with:
-          name: soca-0.0.1
+          name: soca-0.0.2
           path: |
-            dist/simple-oauth-cimd-access-0.0.1.zip
+            dist/simple-oauth-cimd-access-0.0.2.zip
             dist/SHA256SUMS
           if-no-files-found: error

@@ -9,7 +9,7 @@ header = (root / 'simple-oauth-cimd-access/simple-oauth-cimd-access.php').read_t
 readme = (root / 'simple-oauth-cimd-access/readme.txt').read_text()
 build = (root / 'tools/build.py').read_text()
 version = re.search(r'^ \* Version: (\S+)$', header, re.M).group(1)
-assert version == '0.0.1', f'unexpected release version {version}'
+assert version == '0.0.2', f'unexpected release version {version}'
 assert f'Stable tag: {version}' in readme
 assert f"version='{version}'" in build
 

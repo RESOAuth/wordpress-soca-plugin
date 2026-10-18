@@ -5,14 +5,14 @@ final class Admin {
         add_action('admin_menu', static function () { add_options_page('SOCA - Simple OAuth CIMD Access','SOCA','manage_options','simple-oauth-cimd-access',[self::class,'page']); });
         add_action('admin_enqueue_scripts', static function ($hook) {
             if ($hook==='settings_page_simple-oauth-cimd-access') {
-                wp_enqueue_script('soca-admin',plugins_url('assets/admin.js',SOCA_FILE),[], '0.0.1',true);
-                wp_enqueue_style('soca-admin',plugins_url('assets/admin.css',SOCA_FILE),[], '0.0.1');
+                wp_enqueue_script('soca-admin',plugins_url('assets/admin.js',SOCA_FILE),[], '0.0.2',true);
+                wp_enqueue_style('soca-admin',plugins_url('assets/admin.css',SOCA_FILE),[], '0.0.2');
             }
         });
         add_filter('site_status_tests',static function ($tests) { $tests['direct']['soca']=['label'=>'SOCA','test'=>[self::class,'health']]; return $tests; });
         add_filter('debug_information',static function ($info) {
             $s=Settings::get(); $info['soca']=['label'=>'SOCA - Simple OAuth CIMD Access','fields'=>[
-                'version'=>['label'=>'Version','value'=>'0.0.1'], 'mode'=>['label'=>'Metadata mode','value'=>$s['mode']],
+                'version'=>['label'=>'Version','value'=>'0.0.2'], 'mode'=>['label'=>'Metadata mode','value'=>$s['mode']],
                 'enabled'=>['label'=>'Enabled','value'=>$s['enabled'] && !Settings::disabled()?'yes':'no'],
                 'cron'=>['label'=>'Maintenance','value'=>wp_next_scheduled('soca_maintenance')?'scheduled':'missing']]]; return $info;
         });

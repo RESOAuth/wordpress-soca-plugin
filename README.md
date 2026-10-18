@@ -2,7 +2,7 @@
 
 SOCA (Simple OAuth CIMD Access) is an open-source WordPress single sign-on plugin built and supported by RESOAuth® that can use another compatible configured provider. It uses OIDC authorization code + PKCE S256, `private_key_jwt` ES256, and self-hosted or proxy Client ID Metadata Documents (CIMD). It does **not** make WordPress an authorization server.
 
-Install `dist/simple-oauth-cimd-access-0.0.1.zip` using **Plugins → Add Plugin → Upload Plugin**, activate it, then open **Settings → SOCA**. PHP 8.1+, OpenSSL, cURL, and WordPress 6.8+ are required. The release contains its isolated JWT dependency; Composer is not needed on the WordPress server.
+Install `dist/simple-oauth-cimd-access-0.0.2.zip` using **Plugins → Add Plugin → Upload Plugin**, activate it, then open **Settings → SOCA**. PHP 8.1+, OpenSSL, cURL, and WordPress 6.8+ are required. The release contains its isolated JWT dependency; Composer is not needed on the WordPress server.
 
 When upgrading from the old `oauth-cimd-auth` folder, install the new ZIP, deactivate **OAuth CIMD Auth**, then activate **SOCA**. Both folders must not run together. Existing site settings, encrypted keys and issuer/subject bindings are retained under their original internal database names; uninstalling the old plugin preserves them by default. The internal `OCIMD` PHP namespace and `ocimd_*` storage names remain for compatibility. Check the new client metadata URL and complete a fresh test login before removing the old folder.
 

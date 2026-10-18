@@ -4,7 +4,7 @@ Tags: openid-connect, oauth, login, cimd, pkce
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.0.1
+Stable tag: 0.0.2
 License: AGPLv3
 License URI: https://www.gnu.org/licenses/agpl-3.0.html
 
@@ -36,5 +36,8 @@ Yes. A verified email from the configured provider can match an existing local a
 No, unless OAUTH_CIMD_AUTH_ERASE_DATA is explicitly set to true before uninstall. WordPress users are never deleted by uninstall.
 
 == Changelog ==
+= 0.0.2 =
+Use SOCA names consistently across recovery, diagnostics and maintenance, retain legacy compatibility, and default the login button to "Continue with SSO".
+
 = 0.0.1 =
 Initial SOCA release: OIDC code flow with PKCE, CIMD metadata, verified-email access policy, identity binding, public key rotation, diagnostics and local recovery.
