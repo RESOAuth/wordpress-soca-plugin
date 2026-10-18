@@ -59,7 +59,9 @@ final class Store {
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%s", $id), ARRAY_A);
         Support::need(is_array($row) && (int)$row['expires'] >= time(), 'state', 'Invalid or expired login state.');
         $tx = self::open($row['payload']);
-        Support::need(hash_equals($tx['browser'], hash('sha256', $browser)), 'browser', 'Login must finish in the browser that started it.');
+        $diagnostics = ['ref'=>$tx['audit_ref'] ?? '', 'flow'=>$tx['purpose'] ?? ''];
+        if ($browser === '') { throw new Failure('browser_cookie_missing', 'The browser did not return the login cookie.', $diagnostics); }
+        if (!hash_equals($tx['browser'], hash('sha256', $browser))) { throw new Failure('browser_cookie_mismatch', 'The login cookie does not match the browser that started this attempt.', $diagnostics); }
         // One concurrent callback wins even with a persistent WordPress object cache.
         $deleted = $wpdb->query($wpdb->prepare("DELETE FROM $table WHERE id=%s AND expires >= %d", $id, time()));
         Support::need($deleted === 1, 'replay', 'Login transaction has already been used.');

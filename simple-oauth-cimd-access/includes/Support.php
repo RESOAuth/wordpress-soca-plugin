@@ -67,6 +67,7 @@ final class Support {
         if (isset($context['exception']) && is_string($context['exception']) && preg_match('/^[A-Za-z0-9_\\\\]{1,96}$/D', $context['exception'])) { $entry['exception'] = $context['exception']; }
         if (isset($context['http_status']) && is_int($context['http_status']) && $context['http_status'] >= 100 && $context['http_status'] <= 599) { $entry['http_status'] = $context['http_status']; }
         if (isset($context['curl_errno']) && is_int($context['curl_errno']) && $context['curl_errno'] >= 1 && $context['curl_errno'] <= 99) { $entry['curl_errno'] = $context['curl_errno']; }
+        if (isset($context['cookie_host_match']) && is_bool($context['cookie_host_match'])) { $entry['cookie_host_match'] = $context['cookie_host_match']; }
         $log[] = $entry;
         update_option('ocimd_audit', array_slice($log, -100), false);
     }

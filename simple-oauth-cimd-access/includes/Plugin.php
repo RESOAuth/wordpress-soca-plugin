@@ -117,8 +117,8 @@ final class Plugin {
             'inline_client_id_changes'=>$s['mode']==='proxy' && $s['key_mode']==='inline'];
     }
     private static function cookieName(string $state): string { return '__Host-ocimd_' . get_current_blog_id() . '_' . substr(hash('sha256',$state),0,16); }
-    private static function cookie(string $state, string $value): void {
-        setcookie(self::cookieName($state),$value,['expires'=>$value?time()+600:time()-3600,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
+    private static function cookie(string $state, string $value): bool {
+        return setcookie(self::cookieName($state),$value,['expires'=>$value?time()+600:time()-3600,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
     }
     public static function start(): void {
         $ref = bin2hex(random_bytes(6)); $flow = 'login'; $step = 'request';
@@ -151,8 +151,13 @@ final class Plugin {
             'nonce'=>$nonce,'verifier'=>$verifier,'browser'=>hash('sha256',$browser),'started'=>time(),'purpose'=>$purpose,'reauth'=>$purpose!=='login',
             'user'=>$purpose==='login'?0:get_current_user_id(),'session'=>$purpose==='login'?'':hash('sha256',wp_get_session_token()),
             'destination'=>Support::destination(Support::scalar($_GET,'redirect_to')),'audit_ref'=>$ref];
-        Store::createTransaction($state,$tx); self::cookie($state,$browser);
-        Support::audit('login_started', $purpose==='test' ? get_current_user_id() : 0, ['flow'=>$purpose,'step'=>'redirect','ref'=>$ref]);
+        Store::createTransaction($state,$tx);
+        Support::need(self::cookie($state,$browser), 'browser_cookie_set', 'Could not set the browser login cookie.');
+        $incomingHost = $_SERVER['HTTP_HOST'] ?? '';
+        $requestHost = is_string($incomingHost) ? wp_parse_url('https://' . $incomingHost, PHP_URL_HOST) : null;
+        $callbackHost = wp_parse_url($tx['callback'], PHP_URL_HOST);
+        $hostMatch = is_string($requestHost) && is_string($callbackHost) ? strcasecmp($requestHost,$callbackHost) === 0 : null;
+        Support::audit('login_started', $purpose==='test' ? get_current_user_id() : 0, ['flow'=>$purpose,'step'=>'redirect','ref'=>$ref,'cookie_host_match'=>$hostMatch]);
         $step = 'redirect';
         $params=['response_type'=>'code','response_mode'=>'query','client_id'=>$tx['client'],'redirect_uri'=>$tx['callback'],'scope'=>$s['scopes'],
             'state'=>$state,'nonce'=>$nonce,'code_challenge'=>Support::b64(hash('sha256',$verifier,true)),'code_challenge_method'=>'S256'];
@@ -205,6 +210,10 @@ final class Plugin {
         } catch (\Throwable $e) { self::fail($e,$flow,$step,$ref); }
     }
     private static function fail(\Throwable $e, string $flow, string $step, string $ref): void {
+        if ($e instanceof Failure) {
+            if (is_string($e->diagnostics['ref'] ?? null) && preg_match('/^[a-f0-9]{12}$/D', $e->diagnostics['ref'])) { $ref = $e->diagnostics['ref']; }
+            if (in_array($e->diagnostics['flow'] ?? null, ['login','test'], true)) { $flow = $e->diagnostics['flow']; }
+        }
         $context = ['flow'=>$flow,'step'=>$step,'reason'=>$e instanceof Failure ? $e->reason : 'internal_error','ref'=>$ref];
         if ($e instanceof Failure) { $context += $e->diagnostics; }
         if (!$e instanceof Failure) { $context['exception'] = get_class($e); }

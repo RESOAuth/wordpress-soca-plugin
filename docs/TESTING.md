@@ -4,6 +4,8 @@ The baseline browser and multisite runs were executed on 16 October 2026 with co
 
 For **SOCA 0.0.3**, the 27-group protocol suite, 19-group WordPress suite, two concurrency scenarios, seven-group multisite suite, PHP syntax checks, dependency advisory audit, release metadata check and ZIP checksum/structure checks passed on 18 October 2026. A real failed start request returned a reference that matched a `login_failed` audit event. The browser suite has not been rerun for 0.0.3.
 
+For **SOCA 0.0.4**, the 27-group protocol suite and 19-group WordPress suite passed on 18 October 2026. A real callback without the browser cookie returned `browser_cookie_missing` and reused the transaction's audit reference. The browser suite has not been rerun for 0.0.4.
+
 **SOCA 0.0.1 baseline:** The 27-group protocol suite and 18-group WordPress suite cover the initial release. The saved result in [TEST-RESULTS.txt](TEST-RESULTS.txt) records the exact checks run for this branch. Earlier development used an isolated WordPress installation and mock browser/provider tests; those results are not a claim of certification or live RESOAuth login.
 
 ## Suites
