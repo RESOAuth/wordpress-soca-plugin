@@ -137,8 +137,9 @@ test('issuer audience is used when configured for client authentication',functio
     expect((new Provider($http))->exchange($tx,'test-code')['sub']==='subject-1');
 });
 test('token HTTP refusal has a distinct redacted audit reason',function(){
-    $tx=transaction();$http=new FixtureHttp(fn()=>throw new \OCIMD\Failure('http_status','HTTPS endpoint must return 200 (received 401).'));
-    rejects(fn()=>(new Provider($http))->exchange($tx,'test-code'),'token_http_status');
+    $tx=transaction();$http=new FixtureHttp(fn()=>throw new \OCIMD\Failure('http_status','HTTPS endpoint must return 200 (received 401).',['http_status'=>401]));
+    try {(new Provider($http))->exchange($tx,'test-code');throw new \RuntimeException('Expected token refusal.');}
+    catch (\OCIMD\Failure $e) {expect($e->reason==='token_http_status' && $e->diagnostics['http_status']===401);}
 });
 test('query values are encoded without parameter injection',function(){
     $url=Support::query('https://provider.company.com/auth?tenant=one',['client_id'=>'https://proxy.company.com/meta?a=1&b=2','redirect_uri'=>'https://client.company.com/cb?action=oauth&x=y']);

@@ -16,15 +16,15 @@ test('multisite has separate settings, key pairs and encryption context',functio
     $other['provider']='Second site';update_option('ocimd_settings',$other,false);expect(parse_url(home_url('/'),PHP_URL_PATH)==='/second/');rejects(fn()=>Store::open($rootCipher),'encryption');
 });
 test('site cannot consume another site transaction',function()use($state,$browser){rejects(fn()=>Store::consumeTransaction($state,$browser),'state');});
-test('site cannot see another site identity and cannot match a nonmember',function()use($claims,$s,$user){expect(Identity::forUser((int)$user)===[]);rejects(fn()=>Identity::resolve($claims,$s),'account_missing');});
+test('site cannot authenticate a matching network user who is not a member',function()use($claims,$s){rejects(fn()=>Identity::resolve($claims,$s),'account_missing');});
 add_user_to_blog($site,(int)$user,'subscriber');
-test('site independently binds same exact issuer and subject',function()use($claims,$s,$user){expect(Identity::resolve($claims,$s)->ID===$user);expect(count(Identity::forUser((int)$user))===1);});
-test('removal from one site removes only that site binding',function()use($user,$site){require_once ABSPATH.'wp-admin/includes/user.php';wp_delete_user((int)$user);expect(Identity::forUser((int)$user)===[]);});
+test('site independently matches the current verified email',function()use($claims,$s,$user){expect(Identity::resolve($claims,$s)->ID===$user);$changed=$claims;$changed['sub']='new-pairwise-subject';expect(Identity::resolve($changed,$s)->ID===$user);});
+test('removal from one site prevents login on that site',function()use($user,$claims,$s){require_once ABSPATH.'wp-admin/includes/user.php';wp_delete_user((int)$user);rejects(fn()=>Identity::resolve($claims,$s),'account_missing');});
 restore_current_blog();
-test('original site settings, key and identity remain intact',function()use($rootSettings,$rootKeys,$user,$state,$browser){expect(Settings::get()===$rootSettings);expect(Keys::get()['active']===$rootKeys['active']);expect(count(Identity::forUser((int)$user))===1);Store::consumeTransaction($state,$browser);});
-test('a network spam flag prevents authentication of an existing binding',function()use($claims,$s,$user){
+test('original site settings, key and account access remain intact',function()use($rootSettings,$rootKeys,$user,$state,$browser,$claims,$s){expect(Settings::get()===$rootSettings);expect(Keys::get()['active']===$rootKeys['active']);expect(Identity::resolve($claims,$s)->ID===$user);Store::consumeTransaction($state,$browser);});
+test('a network spam flag prevents authentication of the matching account',function()use($claims,$s,$user){
     global $wpdb;$wpdb->update($wpdb->users,['spam'=>1],['ID'=>$user]);clean_user_cache($user);rejects(fn()=>Identity::resolve($claims,$s),'account_blocked');
     $wpdb->update($wpdb->users,['spam'=>0],['ID'=>$user]);clean_user_cache($user);
 });
-require_once ABSPATH.'wp-admin/includes/ms.php';wpmu_delete_user((int)$user);expect(Identity::forUser((int)$user)===[],'Network deletion must remove identity');wp_delete_site($site);
+require_once ABSPATH.'wp-admin/includes/ms.php';wpmu_delete_user((int)$user);rejects(fn()=>Identity::resolve($claims,$s),'registration_disabled');wp_delete_site($site);
 echo ($GLOBALS['passed']??0).' passed, '.($GLOBALS['failed']??0)." failed\n";if(!empty($GLOBALS['failed']))WP_CLI::halt(1);

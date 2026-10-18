@@ -14,4 +14,4 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
 assert results[0].startswith('user:') and results[0]==results[1],results
 assert cli('eval',"global $wpdb;echo $wpdb->get_var(\"SELECT COUNT(*) FROM {$wpdb->users} WHERE user_email='race@company.com'\");")=='1'
 cli('eval',"require_once ABSPATH.'wp-admin/includes/user.php';wp_delete_user("+results[0].split(':')[1]+");delete_option('ocimd_concurrency');")
-print('PASS concurrent identity creation produces exactly one account and binding')
+print('PASS concurrent email-based creation produces exactly one account')

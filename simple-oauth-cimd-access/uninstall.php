@@ -1,5 +1,5 @@
 <?php
-// Preserve recovery-sensitive identity bindings and encrypted keys unless the operator opts in.
+// Preserve encrypted keys and unused legacy binding rows unless the operator opts in.
 if (!defined('WP_UNINSTALL_PLUGIN') ||
     !((defined('SOCA_ERASE_DATA') && SOCA_ERASE_DATA) || (defined('OAUTH_CIMD_AUTH_ERASE_DATA') && OAUTH_CIMD_AUTH_ERASE_DATA))) { exit; }
 $ocimdSites = is_multisite() ? get_sites(['fields'=>'ids','number'=>0]) : [get_current_blog_id()];
