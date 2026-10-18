@@ -6,7 +6,7 @@ For **SOCA 0.0.3**, the 27-group protocol suite, 19-group WordPress suite, two c
 
 For **SOCA 0.0.4**, the 27-group protocol suite and 19-group WordPress suite passed on 18 October 2026. A real callback without the browser cookie returned `browser_cookie_missing` and reused the transaction's audit reference. The browser suite has not been rerun for 0.0.4.
 
-For **SOCA 0.0.5**, the direct callback no longer sets or requires a SOCA transaction cookie. On 18 October 2026, the 27-group protocol suite, 19-group WordPress suite, 17-scenario browser suite, two concurrency scenarios and package checks passed against an isolated local fixture. The browser suite includes a cross-browser callback case to document the resulting login CSRF limitation; see [SECURITY.md](SECURITY.md). The multisite fixture and a live RESOAuth user login were not run for this change.
+For **SOCA 0.0.5**, the direct callback does not use a SOCA transaction cookie and checks the User-Agent. On 18 October 2026, the 27-group protocol suite, 19-group WordPress suite, 18-scenario browser suite, two concurrency scenarios and package checks passed against an isolated local fixture. The multisite fixture and a live RESOAuth user login were not run for this change.
 
 **SOCA 0.0.1 baseline:** The 27-group protocol suite and 18-group WordPress suite cover the initial release. The saved result in [TEST-RESULTS.txt](TEST-RESULTS.txt) records the exact checks run for this branch. Earlier development used an isolated WordPress installation and mock browser/provider tests; those results are not a claim of certification or live RESOAuth login.
 

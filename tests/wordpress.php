@@ -63,10 +63,11 @@ try {
         finally { remove_filter('soca_http',$current); remove_filter('oauth_cimd_auth_http',$legacy); }
     });
     test('single-use and encrypted transactions',function(){
-        global $wpdb;$state=Support::random();$ref='abcdef123456';Store::createTransaction($state,['verifier'=>'confidential-verifier','audit_ref'=>$ref,'purpose'=>'login']);
+        global $wpdb;$state=Support::random();$ref='abcdef123456';$ua=hash('sha256','fixture-agent');Store::createTransaction($state,['verifier'=>'confidential-verifier','audit_ref'=>$ref,'purpose'=>'login','user_agent'=>$ua]);
         $raw=$wpdb->get_var($wpdb->prepare("SELECT payload FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state)));expect(!str_contains($raw,'confidential-verifier'));
-        expect(Store::consumeTransaction($state)['verifier']==='confidential-verifier');rejects(fn()=>Store::consumeTransaction($state),'state');
-        $state=Support::random();Store::createTransaction($state,[]);$wpdb->update($wpdb->prefix.'ocimd_transactions',['expires'=>time()-1],['id'=>hash('sha256',$state)]);rejects(fn()=>Store::consumeTransaction($state),'state');Store::clean();expect(!$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state))));
+        rejects(fn()=>Store::consumeTransaction($state,hash('sha256','different-agent')),'user_agent_mismatch');
+        expect(Store::consumeTransaction($state,$ua)['verifier']==='confidential-verifier');rejects(fn()=>Store::consumeTransaction($state,$ua),'state');
+        $state=Support::random();Store::createTransaction($state,['user_agent'=>$ua]);$wpdb->update($wpdb->prefix.'ocimd_transactions',['expires'=>time()-1],['id'=>hash('sha256',$state)]);rejects(fn()=>Store::consumeTransaction($state,$ua),'state');Store::clean();expect(!$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}ocimd_transactions WHERE id=%s",hash('sha256',$state))));
     });
     $ordinary=$make('soca-test-ordinary','ordinary@company.com');$admin=$make('soca-test-admin','privileged@company.com','administrator');
     $ordinary2=$make('soca-test-ordinary2','ordinary2@company.com');

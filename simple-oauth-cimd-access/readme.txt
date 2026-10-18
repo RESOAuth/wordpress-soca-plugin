@@ -37,7 +37,7 @@ No, unless SOCA_ERASE_DATA is explicitly set to true before uninstall. Old bindi
 
 == Changelog ==
 = 0.0.5 =
-Use a direct OIDC callback without a SOCA transaction cookie. Preserve one-time state, PKCE, nonce, token validation, verified-email account selection and redacted audit events. See SECURITY.md for the login CSRF limitation of an unbound callback.
+Use a direct OIDC callback without a SOCA transaction cookie. Match the User-Agent at start and callback; preserve one-time state, PKCE, nonce, token validation, verified-email account selection and redacted audit events.
 
 = 0.0.4 =
 Distinguish missing and mismatched browser cookies in redacted audit events, keep the login reference across transaction failures, and report whether the start and callback hostnames match.

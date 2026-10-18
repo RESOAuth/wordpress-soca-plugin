@@ -116,6 +116,7 @@ final class Plugin {
             'maintenance'=>get_option('ocimd_maintenance_status',[]),'next_cron'=>wp_next_scheduled('soca_maintenance'),
             'inline_client_id_changes'=>$s['mode']==='proxy' && $s['key_mode']==='inline'];
     }
+    private static function userAgentHash(): string { return hash('sha256', is_string($_SERVER['HTTP_USER_AGENT'] ?? null) ? $_SERVER['HTTP_USER_AGENT'] : ''); }
     public static function start(): void {
         $ref = bin2hex(random_bytes(6)); $flow = 'login'; $step = 'request';
         try {
@@ -144,7 +145,7 @@ final class Plugin {
         $step = 'transaction';
         $keys=Keys::get(); $state=Support::random(); $nonce=Support::random(); $verifier=Support::random();
         $tx=['settings'=>$s,'discovery'=>$d,'client'=>Metadata::clientId($s),'callback'=>Metadata::callback(),'kid'=>$keys['active'],
-            'nonce'=>$nonce,'verifier'=>$verifier,'started'=>time(),'purpose'=>$purpose,'reauth'=>$purpose!=='login',
+            'nonce'=>$nonce,'verifier'=>$verifier,'user_agent'=>self::userAgentHash(),'started'=>time(),'purpose'=>$purpose,'reauth'=>$purpose!=='login',
             'user'=>$purpose==='login'?0:get_current_user_id(),'session'=>$purpose==='login'?'':hash('sha256',wp_get_session_token()),
             'destination'=>Support::destination(Support::scalar($_GET,'redirect_to')),'audit_ref'=>$ref];
         Store::createTransaction($state,$tx);
@@ -166,7 +167,7 @@ final class Plugin {
             $names=[]; foreach (explode('&',$_SERVER['QUERY_STRING']??'') as $pair) { $name=urldecode(explode('=',$pair,2)[0]); Support::need(!in_array($name,$names,true),'duplicate_parameter','Duplicate callback parameter.'); $names[]=$name; }
             $step = 'transaction';
             $state=Support::scalar($_GET,'state',100);
-            $tx=Store::consumeTransaction($state);
+            $tx=Store::consumeTransaction($state,self::userAgentHash());
             $ref = is_string($tx['audit_ref'] ?? null) && preg_match('/^[a-f0-9]{12}$/D', $tx['audit_ref']) ? $tx['audit_ref'] : $ref;
             $flow = ($tx['purpose'] ?? '') === 'test' ? 'test' : 'login';
             Support::audit('callback_received', 0, ['flow'=>$flow,'step'=>'configuration','ref'=>$ref]);
