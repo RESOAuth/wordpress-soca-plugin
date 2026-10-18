@@ -52,16 +52,13 @@ final class Store {
         global $wpdb;
         Support::need($wpdb->insert($wpdb->prefix . 'ocimd_transactions', ['id'=>hash('sha256', $state),'expires'=>time()+600,'payload'=>self::seal($data)]) === 1, 'storage', 'Cannot store login transaction.');
     }
-    public static function consumeTransaction(string $state, string $browser): array {
+    public static function consumeTransaction(string $state): array {
         global $wpdb;
         Support::need((bool) preg_match('/^[A-Za-z0-9_-]{43}$/D', $state), 'state', 'Invalid or expired login state.');
         $id = hash('sha256', $state); $table = $wpdb->prefix . 'ocimd_transactions';
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%s", $id), ARRAY_A);
         Support::need(is_array($row) && (int)$row['expires'] >= time(), 'state', 'Invalid or expired login state.');
         $tx = self::open($row['payload']);
-        $diagnostics = ['ref'=>$tx['audit_ref'] ?? '', 'flow'=>$tx['purpose'] ?? ''];
-        if ($browser === '') { throw new Failure('browser_cookie_missing', 'The browser did not return the login cookie.', $diagnostics); }
-        if (!hash_equals($tx['browser'], hash('sha256', $browser))) { throw new Failure('browser_cookie_mismatch', 'The login cookie does not match the browser that started this attempt.', $diagnostics); }
         // One concurrent callback wins even with a persistent WordPress object cache.
         $deleted = $wpdb->query($wpdb->prepare("DELETE FROM $table WHERE id=%s AND expires >= %d", $id, time()));
         Support::need($deleted === 1, 'replay', 'Login transaction has already been used.');

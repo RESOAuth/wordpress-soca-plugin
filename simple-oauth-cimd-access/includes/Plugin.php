@@ -116,10 +116,6 @@ final class Plugin {
             'maintenance'=>get_option('ocimd_maintenance_status',[]),'next_cron'=>wp_next_scheduled('soca_maintenance'),
             'inline_client_id_changes'=>$s['mode']==='proxy' && $s['key_mode']==='inline'];
     }
-    private static function cookieName(string $state): string { return '__Host-ocimd_' . get_current_blog_id() . '_' . substr(hash('sha256',$state),0,16); }
-    private static function cookie(string $state, string $value): bool {
-        return setcookie(self::cookieName($state),$value,['expires'=>$value?time()+600:time()-3600,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
-    }
     public static function start(): void {
         $ref = bin2hex(random_bytes(6)); $flow = 'login'; $step = 'request';
         try {
@@ -146,18 +142,13 @@ final class Plugin {
             Metadata::validate($s,$http); update_option('ocimd_checked',['time'=>time(),'context'=>$context,'revision'=>$s['revision']],false);
         }
         $step = 'transaction';
-        $keys=Keys::get(); $state=Support::random(); $browser=Support::random(); $nonce=Support::random(); $verifier=Support::random();
+        $keys=Keys::get(); $state=Support::random(); $nonce=Support::random(); $verifier=Support::random();
         $tx=['settings'=>$s,'discovery'=>$d,'client'=>Metadata::clientId($s),'callback'=>Metadata::callback(),'kid'=>$keys['active'],
-            'nonce'=>$nonce,'verifier'=>$verifier,'browser'=>hash('sha256',$browser),'started'=>time(),'purpose'=>$purpose,'reauth'=>$purpose!=='login',
+            'nonce'=>$nonce,'verifier'=>$verifier,'started'=>time(),'purpose'=>$purpose,'reauth'=>$purpose!=='login',
             'user'=>$purpose==='login'?0:get_current_user_id(),'session'=>$purpose==='login'?'':hash('sha256',wp_get_session_token()),
             'destination'=>Support::destination(Support::scalar($_GET,'redirect_to')),'audit_ref'=>$ref];
         Store::createTransaction($state,$tx);
-        Support::need(self::cookie($state,$browser), 'browser_cookie_set', 'Could not set the browser login cookie.');
-        $incomingHost = $_SERVER['HTTP_HOST'] ?? '';
-        $requestHost = is_string($incomingHost) ? wp_parse_url('https://' . $incomingHost, PHP_URL_HOST) : null;
-        $callbackHost = wp_parse_url($tx['callback'], PHP_URL_HOST);
-        $hostMatch = is_string($requestHost) && is_string($callbackHost) ? strcasecmp($requestHost,$callbackHost) === 0 : null;
-        Support::audit('login_started', $purpose==='test' ? get_current_user_id() : 0, ['flow'=>$purpose,'step'=>'redirect','ref'=>$ref,'cookie_host_match'=>$hostMatch]);
+        Support::audit('login_started', $purpose==='test' ? get_current_user_id() : 0, ['flow'=>$purpose,'step'=>'redirect','ref'=>$ref]);
         $step = 'redirect';
         $params=['response_type'=>'code','response_mode'=>'query','client_id'=>$tx['client'],'redirect_uri'=>$tx['callback'],'scope'=>$s['scopes'],
             'state'=>$state,'nonce'=>$nonce,'code_challenge'=>Support::b64(hash('sha256',$verifier,true)),'code_challenge_method'=>'S256'];
@@ -174,8 +165,8 @@ final class Plugin {
             // PHP collapses duplicate query keys; reject them before reading the parsed request.
             $names=[]; foreach (explode('&',$_SERVER['QUERY_STRING']??'') as $pair) { $name=urldecode(explode('=',$pair,2)[0]); Support::need(!in_array($name,$names,true),'duplicate_parameter','Duplicate callback parameter.'); $names[]=$name; }
             $step = 'transaction';
-            $state=Support::scalar($_GET,'state',100); $browser=Support::scalar($_COOKIE,self::cookieName($state),100);
-            $tx=Store::consumeTransaction($state,$browser); self::cookie($state,'');
+            $state=Support::scalar($_GET,'state',100);
+            $tx=Store::consumeTransaction($state);
             $ref = is_string($tx['audit_ref'] ?? null) && preg_match('/^[a-f0-9]{12}$/D', $tx['audit_ref']) ? $tx['audit_ref'] : $ref;
             $flow = ($tx['purpose'] ?? '') === 'test' ? 'test' : 'login';
             Support::audit('callback_received', 0, ['flow'=>$flow,'step'=>'configuration','ref'=>$ref]);

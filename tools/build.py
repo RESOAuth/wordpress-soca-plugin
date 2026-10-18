@@ -3,7 +3,7 @@
 import hashlib, json, pathlib, re, zipfile
 root=pathlib.Path(__file__).resolve().parents[1]
 out=root/'dist';out.mkdir(exist_ok=True)
-version='0.0.4'
+version='0.0.5'
 def archive(path,items):
     with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
         for target,source in sorted(items):

@@ -4,7 +4,7 @@ Tags: openid-connect, oauth, login, cimd, pkce
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.0.4
+Stable tag: 0.0.5
 License: AGPLv3
 License URI: https://www.gnu.org/licenses/agpl-3.0.html
 
@@ -36,6 +36,9 @@ Yes. A verified email from the configured provider selects the matching local ac
 No, unless SOCA_ERASE_DATA is explicitly set to true before uninstall. Old binding rows are no longer used for login. WordPress users are never deleted by uninstall.
 
 == Changelog ==
+= 0.0.5 =
+Use a direct OIDC callback without a SOCA transaction cookie. Preserve one-time state, PKCE, nonce, token validation, verified-email account selection and redacted audit events. See SECURITY.md for the login CSRF limitation of an unbound callback.
+
 = 0.0.4 =
 Distinguish missing and mismatched browser cookies in redacted audit events, keep the login reference across transaction failures, and report whether the start and callback hostnames match.
 

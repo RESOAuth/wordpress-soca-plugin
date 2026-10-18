@@ -11,7 +11,8 @@ add_action('plugins_loaded', static function () {
                 return ['json'=>$doc,'headers'=>$headers];
             }
             if ($url===$issuer.'/.well-known/openid-configuration') {
-                return ['json'=>['issuer'=>$issuer,'authorization_endpoint'=>$issuer.':8443/?ocimd_fixture_authorize=1','token_endpoint'=>$issuer.'/token','jwks_uri'=>$issuer.'/jwks',
+                $port=wp_parse_url(home_url('/'),PHP_URL_PORT) ?: 443;
+                return ['json'=>['issuer'=>$issuer,'authorization_endpoint'=>$issuer.':'.$port.'/?ocimd_fixture_authorize=1','token_endpoint'=>$issuer.'/token','jwks_uri'=>$issuer.'/jwks',
                     'response_types_supported'=>['code'],'response_modes_supported'=>['query'],'subject_types_supported'=>['public','pairwise'],
                     'code_challenge_methods_supported'=>['S256'],'token_endpoint_auth_methods_supported'=>['private_key_jwt'],'token_endpoint_auth_signing_alg_values_supported'=>['ES256'],
                     'id_token_signing_alg_values_supported'=>['ES256'],'scopes_supported'=>['openid','email','profile'],'client_id_metadata_document_supported'=>true,'authorization_response_iss_parameter_supported'=>true], 'headers'=>$headers];
