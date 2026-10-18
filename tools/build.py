@@ -3,19 +3,20 @@
 import hashlib, json, pathlib, re, zipfile
 root=pathlib.Path(__file__).resolve().parents[1]
 out=root/'dist';out.mkdir(exist_ok=True)
-version='0.0.5'
+version='0.1.0'
 def archive(path,items):
     with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
         for target,source in sorted(items):
             data=source.read_bytes()
             if source.suffix in ['.php','.json','.md','.txt']:
                 assert not re.search(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----',data),f'Private material in {source}'
-            info=zipfile.ZipInfo(target,(2026,10,16,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED;info.external_attr=0o100644<<16
+            info=zipfile.ZipInfo(target,(2026,10,18,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED;info.external_attr=0o100644<<16
             z.writestr(info,data)
     return {'file':path.name,'bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
 slug='simple-oauth-cimd-access'
 plugin=[(slug+'/'+str(p.relative_to(root/slug)),p) for p in (root/slug).rglob('*') if p.is_file()]
 plugin += [(slug+'/README.md',root/'README.md')]
+plugin += [(slug+'/composer.json',root/'composer.json')]
 plugin += [(slug+'/docs/'+str(p.relative_to(root/'docs')),p) for p in (root/'docs').rglob('*') if p.is_file()]
 assert not any('/tests/' in name or '/work/' in name or name.endswith('wp-config.php') for name,_ in plugin)
 source=[]

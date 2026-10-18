@@ -58,7 +58,13 @@ The [saved JWKS](evidence/resoauth-jwks-2026-10-16.json) contained five public E
 
 **Token audience diagnostic, 16 October 2026:** The [provider's public implementation](https://github.com/RESOAuth/smart-access-gateway/blob/main/src/oauth/clientauth.js) checks a `private_key_jwt` assertion's `aud` against the issuer URL. Two otherwise equivalent requests to the live token endpoint used deliberately invalid authorization codes and valid signed client assertions for this plugin's metadata. With `aud` set to the token endpoint URL, the response was HTTP 401 `invalid_client` and identified the audience; with `aud` set to the issuer, it advanced to HTTP 400 `invalid_grant` for the dummy code. No real code, token or user credential was used. This confirms client-authentication compatibility for the issuer audience, not a complete login. OIDC Core says the token endpoint audience **SHOULD** be used; [RFC 7523 section 3](https://www.rfc-editor.org/rfc/rfc7523.html#section-3) permits the authorization server to define its own exact audience string. The plugin exposes that choice as a generic advanced setting.
 
-## Supplied proxy observation
+## Default Dynamic CIMD proxy observation
+
+On 19 October 2026, a direct HTTPS GET to the new [default service](https://dynamic-cimd.resoauth.cloud/cimd/e30) returned status 200, JSON content type, and `client_id` equal to that exact fetch URL. The `e30` example represents `{}` and is not a complete usable client document. A second round trip sent a generated public metadata fixture with two public EC keys and an HTTPS localhost callback, omitting `client_id`. The service returned every field unchanged and inserted the exact requested URL as `client_id`. [Saved request, response and headers](evidence/dynamic-cimd-roundtrip-2026-10-19.json). No private key, token, password or access policy was sent. The response advertised `Cache-Control: public, max-age=31536000, immutable`, which applies to that immutable proxy URL, not to the hosted provider's cache of client metadata or keys. Provider acceptance and a live end-user login remain unverified.
+
+The default template is `https://dynamic-cimd.resoauth.cloud/cimd/%s`; it is a separate service from the [RESOAuth hosted Smart Access Gateway](https://sag.resoauth.dev/hosted). The gateway's [privacy notice](https://sag.resoauth.dev/hosted/privacy-notice) and [terms of service](https://sag.resoauth.dev/hosted/terms-of-service) cover the hosted sign-in service. New settings use Dynamic CIMD for local development; existing saved proxy templates stay unchanged to avoid silently changing client identifiers. Self-hosted document/JWKS serving does not use a metadata proxy.
+
+## Previous proxy observation
 
 A direct HTTPS GET to [the supplied transport example](https://path2json.olliejc.workers.dev/e30/add_client_id/client.json) returned status 200, JSON content type, and a document containing exactly the requested URL as `client_id`. `e30` decoded to `{}`. That response is a transport demonstration, not usable complete client metadata. [Saved response](evidence/proxy-example-2026-10-16.json).
 
@@ -76,6 +82,7 @@ Both responses advertised `Cache-Control: public, immutable, max-age=86400, s-ma
 | Synthetic rotated provider JWKS | One refresh on unknown kid; subsequent refresh throttled. Invalid algorithm/client-key substitution refused. |
 | Synthetic inline CIMD proxy | Actual generated document decoded/validated in fixture; code, redirect, PKCE and assertion binding verified at the mock token endpoint. |
 | Live RESOAuth | Discovery and JWKS fetched. Full end-user interoperability unverified. |
-| Live supplied path2json proxy | Example and full public-document round trips passed. Provider acceptance unverified. |
+| Live RESOAuth Dynamic CIMD proxy | Example and full public-document round trips passed. Provider acceptance unverified. |
+| Previous supplied path2json proxy | Example and full public-document round trips passed on 16 October 2026. It is no longer the default. |
 
 See [TESTING.md](TESTING.md) for the executable test inventory and environment. No OpenID conformance certification or independent penetration test is claimed.

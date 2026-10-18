@@ -1,52 +1,63 @@
-=== SOCA - Simple OAuth CIMD Access ===
-Contributors: olliejc
-Tags: openid-connect, oauth, login, cimd, pkce
+=== Simple OAuth CIMD Access ===
+Tags: single sign on, openid connect, oauth, login, authentication
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.0.5
-License: AGPLv3
+Stable tag: 0.1.0
+License: AGPL-3.0-only
 License URI: https://www.gnu.org/licenses/agpl-3.0.html
 
-SOCA (Simple OAuth CIMD Access) is open-source WordPress single sign-on built and supported by RESOAuth®.
+Add WordPress single sign-on with OpenID Connect, PKCE and Client ID Metadata Documents. Built by RESOAuth.
 
 == Description ==
-SOCA is an open-source RESOAuth® plugin that also supports other compatible configured providers. OAuth redirects the browser securely; OpenID Connect establishes the user's identity; CIMD publishes this site's client details and public keys.
 
-One configurable OIDC provider per site. Initial settings use RESOAuth. Self-hosted and configurable HTTPS proxy CIMD modes, public JWKS, encrypted P-256 client keys, safe weekly rotation, verified-email account selection on every login, admission policies and optional controlled Subscriber registration.
+SOCA connects a WordPress site to one configured OpenID Connect (OIDC) identity provider. It starts with RESOAuth settings and can use another provider that supports the required OIDC, PKCE, private_key_jwt and Client ID Metadata Document (CIMD) features. It does not make WordPress an OAuth server.
 
-See the bundled README.md, SECURITY.md and STANDARDS.md for setup, protocol choices, live evidence, local Docker development, rotation and recovery. No certification is claimed. Full live RESOAuth login is unverified; realistic mock and WordPress integration/browser profiles are tested.
+Features:
+
+* Self-hosted or configurable HTTPS proxy client metadata, with public JWKS and encrypted, rotating signing keys.
+* Verified-email and exact-domain admission rules, including deny rules. Existing accounts are selected by the current verified email on every login; roles are not changed.
+* Optional creation of missing Subscriber accounts, off by default.
+* Login button, provider test flow, local-login recovery, redacted audit events, Site Health checks and WP-CLI maintenance.
+
+An identity provider that verifies an allowed administrator email can sign in to that administrator account. Review the provider and admission rules before enabling login. Keep a local administrator password and test recovery. A successful metadata check does not prove end-to-end login: a real login with the chosen provider is required. Live RESOAuth end-user login has not yet been verified; no interoperability certification is claimed.
+
+The [source repository](https://github.com/RESOAuth/wordpress-soca-plugin) contains the [operator guide](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/GUIDE.md), [security notes](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/SECURITY.md), build tools and readable source for the bundled JWT library. Report problems in [GitHub Issues](https://github.com/RESOAuth/wordpress-soca-plugin/issues).
+
+= External services and privacy =
+
+The initial issuer, [auth.resoauth.cloud](https://auth.resoauth.cloud), is the [RESOAuth Ltd hosted Smart Access Gateway](https://sag.resoauth.dev/hosted). Its [hosted provider docs](https://sag.resoauth.dev/hosted/connect) explain how applications connect and how visitors sign in through an existing identity provider or an emailed one-time code. Review the hosted gateway's [privacy notice](https://sag.resoauth.dev/hosted/privacy-notice) and [terms of service](https://sag.resoauth.dev/hosted/terms-of-service) before enabling it. SOCA can instead use another compatible provider configured in Settings > SOCA; that provider's own policies apply.
+
+During connection checks and login, SOCA fetches the selected provider's discovery document and public keys. Login redirects the visitor's browser to that provider and exchanges an authorization code at its token endpoint. The client identifier points the provider to this site's public metadata, including its callback URL and public signing keys. The provider processes the visitor's login and returns identity claims, including verified email, to this WordPress site. It sees the visitor's IP address and browser details during login.
+
+For local development, proxy mode defaults to [RESOAuth Dynamic CIMD](https://dynamic-cimd.resoauth.cloud/), a separate service that serves a Client ID Metadata Document from data encoded in its URL. That URL contains this site's public client metadata and, when inline keys are selected, public signing keys. The service receives the requesting server's IP address; its public URL can also be fetched by the configured identity provider. SOCA sends it no WordPress passwords, private signing keys or returned identity claims. Public production sites default to self-hosted metadata; the proxy template is configurable. The [operator guide](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/GUIDE.md) explains proxy choices. Previously saved proxy settings remain in place until an administrator changes them.
+
+SOCA stores encrypted private signing keys and settings on the WordPress site. During login it temporarily stores a one-time transaction and processes the verified email and provider subject to select an account. Its redacted audit omits emails, subjects and tokens. It does not add third-party tracking assets or send usage telemetry. Site owners should describe their chosen identity provider in their own privacy policy.
 
 == Installation ==
-1. Upload and activate the ZIP. PHP OpenSSL and cURL are required.
-2. Open Settings > SOCA. Review issuer, metadata, admission rules and local recovery.
-3. Public HTTPS sites enable the upstream button with a suggested domain allowlist on first activation. Validate connection/documents and test login. Local development sites need an admission rule and manual enablement.
+
+1. Install and activate SOCA on WordPress 6.8+ with PHP 8.1+, OpenSSL and cURL. Use HTTPS and retain a local administrator login.
+2. Open Settings > SOCA. Check the issuer, metadata mode, signing-key publication and email/domain admission rules. Defaults use RESOAuth; public HTTPS sites initially suggest the site's own domain.
+3. Run Validate connection and documents, then Test login with the chosen provider. Confirm a real sign-in and local recovery at /wp-login.php?soca_local=1 before enabling automatic redirection.
+4. For provider-specific settings, migration from OAuth CIMD Auth, key rotation or multisite, follow the [operator guide](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/GUIDE.md).
 
 == Frequently Asked Questions ==
+
+= Can I use a provider other than RESOAuth? =
+Yes, if it supports this plugin's OIDC, PKCE, ES256 private_key_jwt and CIMD profile. Choose the issuer and other settings in Settings > SOCA, then validate documents and complete a real test login. Provider acceptance of query-bearing client URLs and the configured key-cache window must be checked.
+
 = How do I recover local administrator access? =
-Use /wp-login.php?soca_local=1. This skips automatic navigation only. You must still authenticate. Set SOCA_DISABLED=true in wp-config.php or run wp soca disable for emergency recovery.
+Open /wp-login.php?soca_local=1 to skip automatic navigation, then use your existing WordPress credentials. For emergency recovery, set SOCA_DISABLED to true in wp-config.php or run wp soca disable. The URL alone does not authenticate anyone.
 
-= Does proxy mode expose private keys? =
-No. Only public metadata and public keys are encoded. Proxy + inline key rotation changes client_id and can change pairwise subjects. Use a stable public JWKS URL for stable client identity.
+= How are existing accounts selected? =
+The current verified provider email must pass the saved admission rules and uniquely match a WordPress account. This includes administrators, so use a provider whose email verification you trust. A changed provider subject does not relink the account, and SOCA does not change its role.
 
-= Are existing accounts matched by email automatically? =
-Yes. A verified email from the configured provider selects the matching local account on every login, including an administrator. The local role is never changed. Choose a provider that reliably verifies addresses in your admission policy. A changed provider subject does not require relinking.
-
-= Are keys and old binding rows deleted on uninstall? =
-No, unless SOCA_ERASE_DATA is explicitly set to true before uninstall. Old binding rows are no longer used for login. WordPress users are never deleted by uninstall.
+= Is data removed on uninstall? =
+Settings, keys and legacy binding rows are retained by default for recovery. Define SOCA_ERASE_DATA as true before uninstall only when you deliberately want to erase plugin data. WordPress users are never deleted by uninstall.
 
 == Changelog ==
-= 0.0.5 =
-Use a direct OIDC callback without a SOCA transaction cookie. Match the User-Agent at start and callback; preserve one-time state, PKCE, nonce, token validation, verified-email account selection and redacted audit events.
 
-= 0.0.4 =
-Distinguish missing and mismatched browser cookies in redacted audit events, keep the login reference across transaction failures, and report whether the start and callback hostnames match.
+= 0.1.0 =
+Prepare the 0.1.0 WordPress.org release: align RESOAuth metadata, document external services, use the WordPress HTTP API with DNS-pinned HTTPS requests, and package user documentation. Login policy and OIDC validation remain as in 0.0.5.
 
-= 0.0.3 =
-Select accounts by the current verified email on every login, remove subject binding from the login path, and add redacted step/reason/reference audit diagnostics.
-
-= 0.0.2 =
-Use SOCA names consistently across recovery, diagnostics and maintenance, retain legacy compatibility, and default the login button to "Continue with SSO".
-
-= 0.0.1 =
-Initial SOCA release: OIDC code flow with PKCE, CIMD metadata, verified-email access policy, identity binding, public key rotation, diagnostics and local recovery.
+Earlier changes are in the [release history](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/CHANGELOG.md).

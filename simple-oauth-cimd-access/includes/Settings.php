@@ -7,7 +7,7 @@ final class Settings {
         $ready = !Support::localHost($host) && wp_parse_url(home_url('/'), PHP_URL_SCHEME) === 'https' && (bool)$suggested;
         return ['enabled'=>$ready, 'automatic'=>false, 'provider'=>'RESOAuth', 'issuer'=>'https://auth.resoauth.cloud',
             'button'=>'Continue with SSO', 'scopes'=>'openid email profile', 'mode'=>Support::localHost($host)?'proxy':'self', 'key_mode'=>Support::localHost($host)?'inline':'uri', 'jwks_url'=>'',
-            'proxy'=>'https://path2json.olliejc.workers.dev/%s/add_client_id/client.json', 'id_alg'=>'ES256', 'assertion_audience'=>'issuer',
+            'proxy'=>'https://dynamic-cimd.resoauth.cloud/cimd/%s', 'id_alg'=>'ES256', 'assertion_audience'=>'issuer',
             'cache_hours'=>24, 'create_users'=>false,
             'unrestricted'=>false, 'allow_domains'=>$suggested, 'allow_emails'=>[], 'deny_domains'=>[], 'deny_emails'=>[], 'revision'=>Support::random()];
     }
@@ -38,9 +38,9 @@ final class Settings {
         $s = self::get();
         foreach (['enabled','automatic','create_users','unrestricted'] as $key) { $s[$key] = !empty($input[$key]); }
         foreach (['provider','issuer','button','scopes','mode','key_mode','jwks_url','proxy','id_alg','assertion_audience'] as $key) { $s[$key] = trim(Support::scalar($input, $key)); }
-        foreach (['provider','button'] as $key) { Support::need(strlen($s[$key]) > 0 && strlen($s[$key]) <= 120 && strip_tags($s[$key]) === $s[$key], 'settings', 'Provider name and button label must be plain text, 1–120 bytes.'); }
+        foreach (['provider','button'] as $key) { Support::need(strlen($s[$key]) > 0 && strlen($s[$key]) <= 120 && wp_strip_all_tags($s[$key]) === $s[$key], 'settings', 'Provider name and button label must be plain text, 1–120 bytes.'); }
         Http::url($s['issuer']);
-        $p = parse_url($s['issuer']); Support::need(!isset($p['query']), 'issuer', 'Issuer must not have a query. Preserve the provider’s exact issuer, including any trailing slash.');
+        $p = wp_parse_url($s['issuer']); Support::need(!isset($p['query']), 'issuer', 'Issuer must not have a query. Preserve the provider’s exact issuer, including any trailing slash.');
         Support::need(in_array($s['mode'], ['self','proxy'], true) && in_array($s['key_mode'], ['uri','inline'], true), 'settings', 'Invalid metadata/key mode.');
         Support::need(in_array($s['id_alg'], ['ES256','RS256'], true), 'algorithm', 'Select ES256 or RS256 for ID tokens.');
         Support::need(in_array($s['assertion_audience'], ['issuer','token_endpoint'], true), 'assertion_audience', 'Select the provider issuer or token endpoint as the client assertion audience.');

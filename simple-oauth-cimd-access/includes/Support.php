@@ -6,7 +6,7 @@ final class Failure extends \RuntimeException {
 }
 final class Support {
     public static function need(bool $ok, string $code, string $message): void {
-        if (!$ok) { throw new Failure($code, $message); }
+        if (!$ok) { throw new Failure($code, $message); } // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exceptions are not HTML output.
     }
     public static function b64(string $s): string { return rtrim(strtr(base64_encode($s), '+/', '-_'), '='); }
     public static function unb64(string $s): string {

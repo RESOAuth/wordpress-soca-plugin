@@ -1,10 +1,10 @@
 <?php
 namespace OCIMD;
-/** HTTPS only, no redirects, validated DNS pinned into cURL, strict size/time limits. */
+/** HTTPS only, no redirects, validated DNS pinned into WordPress' cURL transport. */
 class Http {
     public static function url(string $url): array {
         Support::need(strlen($url) <= 16384 && !preg_match('/[\x00-\x20\x7f\\\\]/', $url), 'url', 'Invalid URL characters or length.');
-        $p = parse_url($url);
+        $p = wp_parse_url($url);
         Support::need(is_array($p) && ($p['scheme'] ?? '') === 'https' && !isset($p['user']) && !isset($p['pass']) && !isset($p['fragment']), 'https', 'A fixed HTTPS URL without userinfo or fragment is required.');
         $host = $p['host'] ?? '';
         Support::need(!isset($p['port']) || $p['port'] >= 1, 'port', 'Invalid HTTPS port.');
@@ -34,30 +34,46 @@ class Http {
         Support::need(count($ips) > 0, 'dns', 'Public hostname did not resolve.');
         foreach ($ips as $ip) { Support::need(self::publicIp($ip), 'ssrf', 'HTTP target resolved to a nonpublic address.'); }
         $ip = $ips[0]; if (str_contains($ip, ':')) { $ip = '[' . $ip . ']'; }
-        $body = ''; $headers = []; $headerBytes = 0;
-        $requestHeaders = ['Accept: application/json', 'Accept-Encoding: identity'];
+        $headers = ['Accept'=>'application/json', 'Accept-Encoding'=>'identity'];
         if ($bearer !== null) {
-            Support::need(strlen($bearer) <= 16384 && (bool)preg_match('/^[A-Za-z0-9._~+\\/-]+=*$/D', $bearer), 'access_token', 'Invalid bearer token encoding.');
-            $requestHeaders[] = 'Authorization: Bearer ' . $bearer;
+            Support::need(strlen($bearer) <= 16384 && (bool)preg_match('/^[A-Za-z0-9._~+\/-]+=*$/D', $bearer), 'access_token', 'Invalid bearer token encoding.');
+            $headers['Authorization'] = 'Bearer ' . $bearer;
         }
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [CURLOPT_FOLLOWLOCATION=>false, CURLOPT_MAXREDIRS=>0, CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS,
-            CURLOPT_SSL_VERIFYPEER=>true, CURLOPT_SSL_VERIFYHOST=>2, CURLOPT_CONNECTTIMEOUT=>5, CURLOPT_TIMEOUT=>12,
-            CURLOPT_PROXY=>'', CURLOPT_RESOLVE=>["$host:$port:$ip"], CURLOPT_USERAGENT=>'OAuth-CIMD-Auth/1.0',
-            CURLOPT_HTTPHEADER=>$requestHeaders,
-            CURLOPT_WRITEFUNCTION=>static function ($ch, $data) use (&$body) {
-                if (strlen($body) + strlen($data) > 262144) { return 0; } $body .= $data; return strlen($data);
-            }, CURLOPT_HEADERFUNCTION=>static function ($ch, $line) use (&$headers, &$headerBytes) {
-                $headerBytes += strlen($line); if ($headerBytes > 32768) { return 0; }
-                if (str_contains($line, ':')) { [$k,$v] = explode(':', $line, 2); $headers[strtolower(trim($k))] = trim($v); }
-                return strlen($line);
-            }]);
-        if ($form !== null) { curl_setopt($ch, CURLOPT_POST, true); curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($form, '', '&', PHP_QUERY_RFC3986)); }
-        $ok = curl_exec($ch); $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE); $curlErrno = curl_errno($ch); curl_close($ch);
-        if ($ok === false) { throw new Failure('http_transport', 'HTTPS request failed (TLS, DNS, timeout or response limit).', ['curl_errno'=>$curlErrno]); }
+        $args = ['method'=>$form === null ? 'GET' : 'POST', 'headers'=>$headers,
+            'timeout'=>12, 'redirection'=>0, 'sslverify'=>true, 'blocking'=>true,
+            'decompress'=>false, 'limit_response_size'=>262145, 'user-agent'=>'SOCA/0.1.0'];
+        if ($form !== null) {
+            $args['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
+            $args['body'] = http_build_query($form, '', '&', PHP_QUERY_RFC3986);
+        }
+        // WordPress handles the request. Pin its cURL connection to the checked address
+        // while cURL verifies the original HTTPS hostname and certificate.
+        $pinned = false;
+        $pin = static function ($handle, $requestArgs, $requestUrl) use ($url, $host, $port, $ip, &$pinned): void {
+            if ($requestUrl !== $url) { return; }
+            Support::need(curl_setopt_array($handle, [CURLOPT_RESOLVE=>["$host:$port:$ip"], CURLOPT_PROXY=>'', // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt_array -- WordPress documents this hook for cURL options.
+                CURLOPT_CONNECTTIMEOUT=>5, CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS, CURLOPT_FOLLOWLOCATION=>false]),
+                'http_transport', 'Could not pin the HTTPS connection to its checked address.');
+            $pinned = true;
+        };
+        add_action('http_api_curl', $pin, PHP_INT_MAX, 3);
+        try { $response = wp_remote_request($url, $args); }
+        finally { remove_action('http_api_curl', $pin, PHP_INT_MAX); }
+        Support::need($pinned, 'http_transport', 'WordPress did not use its cURL transport; the public address could not be pinned.');
+        if (is_wp_error($response)) { throw new Failure('http_transport', 'HTTPS request failed (TLS, DNS, timeout or response limit).'); }
+        $status = wp_remote_retrieve_response_code($response);
         if ($status !== 200) { throw new Failure('http_status', 'HTTPS endpoint must return 200 without redirection (received ' . (int)$status . ').', ['http_status'=>(int)$status]); }
-        Support::need((bool) preg_match('~^application/(?:json|[a-z0-9.+-]+\+json)(?:\s*;|$)~i', $headers['content-type'] ?? ''), 'content_type', 'Endpoint must return an application/json document.');
-        return ['json'=>Support::object($body), 'headers'=>$headers];
+        $body = wp_remote_retrieve_body($response);
+        Support::need(is_string($body) && strlen($body) <= 262144, 'json_size', 'JSON document is too large.');
+        $responseHeaders = []; $headerBytes = 0;
+        foreach (wp_remote_retrieve_headers($response) as $key=>$value) {
+            $value = is_array($value) ? implode(', ', $value) : (string)$value;
+            $headerBytes += strlen((string)$key) + strlen($value) + 4;
+            $responseHeaders[strtolower((string)$key)] = $value;
+        }
+        Support::need($headerBytes <= 32768, 'http_headers', 'HTTPS response headers are too large.');
+        Support::need((bool) preg_match('~^application/(?:json|[a-z0-9.+-]+\+json)(?:\s*;|$)~i', $responseHeaders['content-type'] ?? ''), 'content_type', 'Endpoint must return an application/json document.');
+        return ['json'=>Support::object($body), 'headers'=>$responseHeaders];
     }
     public static function ttl(array $headers, int $cap): int {
         $cc = strtolower($headers['cache-control'] ?? '');

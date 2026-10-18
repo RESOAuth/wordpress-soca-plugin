@@ -10,7 +10,7 @@ $c=['iss'=>'https://fixture.company.com','sub'=>'wp-test-1','email'=>'ordinary@c
 try {
     test('localhost defaults keep login off and infer no domain',function(){
         $home=get_option('home'); update_option('home','https://localhost:8443');
-        try { $local=Settings::defaults(); expect(!$local['enabled'] && $local['mode']==='proxy' && $local['key_mode']==='inline' && $local['allow_domains']===[] && !$local['unrestricted']); }
+        try { $local=Settings::defaults(); expect(!$local['enabled'] && $local['mode']==='proxy' && $local['key_mode']==='inline' && $local['allow_domains']===[] && !$local['unrestricted'] && $local['proxy']==='https://dynamic-cimd.resoauth.cloud/cimd/%s'); }
         finally { update_option('home',$home); }
     });
     test('allow-any save preserves hidden allowlists while deny rules still win',function()use($before){

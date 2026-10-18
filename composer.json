@@ -8,7 +8,7 @@
   "config": {
     "allow-plugins": false
   },
-  "name": "olliejc/simple-oauth-cimd-access",
+  "name": "resoauth/simple-oauth-cimd-access",
   "type": "wordpress-plugin",
   "license": "AGPL-3.0-only",
   "description": "SOCA: Simple OAuth CIMD Access for WordPress"
