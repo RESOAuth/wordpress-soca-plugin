@@ -8,9 +8,9 @@
     }
   },
   "require": {
-    "php": "^8.3",
+    "php": "^8.5",
     "humanmade/psalm-plugin-wordpress": "^3.1",
-    "vimeo/psalm": "^6.0",
+    "vimeo/psalm": "^6.20",
     "wp-coding-standards/wpcs": "^3.0"
   },
   "config": {
@@ -19,7 +19,7 @@
     },
     "sort-packages": true,
     "platform": {
-      "php": "8.3.0"
+      "php": "8.5.0"
     }
   }
 }

@@ -62,7 +62,7 @@ docker run --rm --network none -v "$PWD:/src:ro" -w /src soca-security-semgrep \
   sh tools/security/run.sh semgrep
 ```
 
-Podman works with the same commands. PHP tooling uses PHP 8.3; Psalm analyzes the plugin against its PHP 8.1 minimum. Development tools have their own Composer manifest and lockfile under `tools/security`; they do not change the root runtime dependency inventory or the plugin's private dependency loader. Dependabot tracks these Composer packages and scanner container images. To update PHP scanner dependencies deliberately, run `composer update` in that directory using the PHP scanner container, then rerun all three checks.
+Podman works with the same commands. PHP tooling uses PHP 8.5 with Psalm 6.20 or newer; Psalm analyzes the plugin against its PHP 8.1 minimum. Protocol and syntax CI covers PHP 8.1, 8.3, and 8.5. The official PHP CLI image already enables the scanner extensions; the Dockerfile installs only Git and unzip rather than rebuilding bundled extensions. Development tools have their own Composer manifest and lockfile under `tools/security`; they do not change the root runtime dependency inventory or the plugin's private dependency loader. Composer's tooling platform is set to PHP 8.5.0, and CI checks the actual runtime and extensions with `composer check-platform-reqs`. Dependabot tracks these Composer packages and scanner container images. To update PHP scanner dependencies deliberately, run `composer update` in that directory using the PHP scanner container, then rerun all three checks.
 
 The checks cover complementary cases:
 
