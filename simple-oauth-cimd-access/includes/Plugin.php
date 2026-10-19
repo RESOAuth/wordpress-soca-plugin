@@ -9,11 +9,12 @@ final class Plugin {
             add_action('admin_post_nopriv_' . $action, [self::class,$method]);
         }
         // The button helper escapes its URL and label before returning HTML.
-        add_action('login_form', static function () { echo self::button(Support::scalar(wp_unslash($_GET), 'redirect_to')); }); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- button() escapes its markup.
+        // nosemgrep: php-request-to-output -- button() escapes its URL and label; scanned independently by Psalm and WordPressCS.
+        add_action('login_form', static function () { echo self::button(Support::scalar(wp_unslash($_GET), 'redirect_to')); }); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped,WordPress.Security.NonceVerification.Recommended -- Public login button; no state change. button() escapes its markup.
         add_action('login_init', [self::class,'automatic']);
         add_filter('login_message', static function ($message) {
-            if (isset($_GET['soca_error'])) {
-                $errorRef = sanitize_text_field(wp_unslash($_GET['soca_error'] ?? ''));
+            if (isset($_GET['soca_error'])) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only login error display; the reference is validated and escaped.
+                $errorRef = sanitize_text_field(wp_unslash($_GET['soca_error'] ?? '')); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only login error display; the reference is validated and escaped.
                 $ref = preg_match('/^[a-f0-9]{12}$/D', $errorRef) ? $errorRef : '';
                 $message .= '<p class="message">SOCA login did not complete. You can retry or use your local account. An administrator can review the redacted audit events.' . ($ref ? ' Reference: <code>' . esc_html($ref) . '</code>.' : '') . '</p>';
             }
@@ -56,16 +57,25 @@ final class Plugin {
         } else { wp_clear_scheduled_hook('soca_maintenance'); }
     }
     public static function documents(): void {
-        if (!isset($_GET['soca_doc'])) { return; }
+        if (!isset($_GET['soca_doc'])) { return; } // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only public client metadata and JWKS endpoint.
         $method = Support::serverString('REQUEST_METHOD');
         if (!in_array($method, ['GET','HEAD'], true)) { status_header(405); exit; }
         try {
-            $kind = Support::scalar(wp_unslash($_GET),'soca_doc');
+            $kind = Support::scalar(wp_unslash($_GET),'soca_doc'); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only public client metadata and JWKS endpoint; kind is allowlisted.
             Support::need(in_array($kind,['client','jwks'],true), 'document', 'Unknown public document.');
             $doc = $kind === 'jwks' ? Keys::jwks() : Metadata::document(Settings::get(), true);
             header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: public, max-age=300, must-revalidate');
             header('X-Content-Type-Options: nosniff'); header('Access-Control-Allow-Origin: *');
-            if ($method !== 'HEAD') { echo Support::json($doc); } exit; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON response, not HTML.
+            // The response is application/json with nosniff, never embedded in HTML.
+            if ($method !== 'HEAD') {
+                /**
+                 * @psalm-taint-escape html
+                 * @psalm-taint-escape has_quotes
+                 */
+                $json = Support::json($doc);
+                echo $json; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON response, not HTML.
+            }
+            exit;
         } catch (\Throwable $e) { status_header(503); header('Cache-Control: no-store'); header('Content-Type: application/json'); echo '{"error":"metadata_unavailable"}'; exit; }
     }
     public static function button(string $destination = ''): string {
@@ -82,8 +92,8 @@ final class Plugin {
         $s = Settings::get();
         if (!$s['enabled'] || !$s['automatic'] || Settings::disabled() || is_user_logged_in() || Support::serverString('REQUEST_METHOD') !== 'GET') { return; }
         // A narrow allowlist preserves recovery, reset, logout, interim, reauth and plugin-specific flows.
-        if (array_diff(array_keys($_GET), ['redirect_to','action']) || (isset($_GET['action']) && $_GET['action'] !== 'login')) { return; }
-        wp_safe_redirect(Support::query(admin_url('admin-post.php'), ['action'=>'soca_start','redirect_to'=>Support::destination(Support::scalar(wp_unslash($_GET),'redirect_to'))])); exit;
+        if (array_diff(array_keys($_GET), ['redirect_to','action']) || (isset($_GET['action']) && $_GET['action'] !== 'login')) { return; } // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public login initiation; the callback requires one-time OAuth state and PKCE.
+        wp_safe_redirect(Support::query(admin_url('admin-post.php'), ['action'=>'soca_start','redirect_to'=>Support::destination(Support::scalar(wp_unslash($_GET),'redirect_to'))])); exit; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public login initiation; the callback requires one-time OAuth state and PKCE.
     }
     private static function rate(string $purpose, int $limit): void {
         $address = Support::serverString('REMOTE_ADDR');
@@ -152,7 +162,7 @@ final class Plugin {
         $tx=['settings'=>$s,'discovery'=>$d,'client'=>Metadata::clientId($s),'callback'=>Metadata::callback(),'kid'=>$keys['active'],
             'nonce'=>$nonce,'verifier'=>$verifier,'user_agent'=>self::userAgentHash(),'started'=>time(),'purpose'=>$purpose,'reauth'=>$purpose!=='login',
             'user'=>$purpose==='login'?0:get_current_user_id(),'session'=>$purpose==='login'?'':hash('sha256',wp_get_session_token()),
-            'destination'=>Support::destination(Support::scalar(wp_unslash($_GET),'redirect_to')),'audit_ref'=>$ref];
+            'destination'=>Support::destination(Support::scalar(wp_unslash($_GET),'redirect_to')),'audit_ref'=>$ref]; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public login destination is restricted to this site before storage and redirect.
         Store::createTransaction($state,$tx);
         Support::audit('login_started', $purpose==='test' ? get_current_user_id() : 0, ['flow'=>$purpose,'step'=>'redirect','ref'=>$ref]);
         $step = 'redirect';
@@ -182,7 +192,7 @@ final class Plugin {
             Support::need(strlen($queryString) <= 16384, 'callback_query', 'Callback query is too long.');
             $names=[]; foreach (explode('&',$queryString) as $pair) { $name=urldecode(explode('=',$pair,2)[0]); Support::need(!in_array($name,$names,true),'duplicate_parameter','Duplicate callback parameter.'); $names[]=$name; }
             $step = 'transaction';
-            $state=Support::scalar(wp_unslash($_GET),'state',100);
+            $state=Support::scalar(wp_unslash($_GET),'state',100); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- OAuth callback consumes one-time state bound to the browser transaction.
             $tx=Store::consumeTransaction($state,self::userAgentHash());
             $ref = is_string($tx['audit_ref'] ?? null) && preg_match('/^[a-f0-9]{12}$/D', $tx['audit_ref']) ? $tx['audit_ref'] : $ref;
             $flow = ($tx['purpose'] ?? '') === 'test' ? 'test' : 'login';
@@ -191,10 +201,10 @@ final class Plugin {
             $s=Settings::get();
             Support::need(!Settings::disabled() && $s['revision']===$tx['settings']['revision'] && ($s['enabled'] || $tx['purpose']!=='login'),'configuration_changed','Configuration changed during login. Start again.');
             $step = 'authorization_response';
-            $iss=Support::scalar(wp_unslash($_GET),'iss');
+            $iss=Support::scalar(wp_unslash($_GET),'iss'); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- OAuth callback validates the response issuer against the stored provider.
             Support::need(($iss==='' && empty($tx['discovery']['authorization_response_iss_parameter_supported'])) || $iss===$tx['settings']['issuer'],'response_issuer','Authorization response issuer mismatch or missing.');
-            Support::need(!isset($_GET['error']),'provider_denied','Provider cancelled or denied the request.');
-            $code=Support::authorizationCode(Support::scalar(wp_unslash($_GET),'code'));
+            Support::need(!isset($_GET['error']),'provider_denied','Provider cancelled or denied the request.'); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- OAuth callback rejects provider errors after consuming one-time state.
+            $code=Support::authorizationCode(Support::scalar(wp_unslash($_GET),'code')); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- OAuth callback exchanges the code using PKCE and validates the signed ID token.
             if ($tx['purpose']!=='login') {
                 Support::need(get_current_user_id()===$tx['user'] && hash_equals($tx['session'],hash('sha256',wp_get_session_token())),'session','The original authenticated local session is required.');
             }

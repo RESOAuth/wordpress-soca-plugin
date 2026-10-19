@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<psalm xmlns="https://getpsalm.org/schema/config"
+       errorLevel="1"
+       phpVersion="8.1"
+       resolveFromConfigFile="true"
+       autoloader="autoload.php">
+    <projectFiles>
+        <directory name="../../tests/security/psalm"/>
+        <file name="../../simple-oauth-cimd-access/includes/Support.php"/>
+    </projectFiles>
+    <plugins>
+        <pluginClass class="PsalmWordPress\Plugin"/>
+        <pluginClass class="SOCA\Security\PsalmTaintPlugin"/>
+    </plugins>
+</psalm>

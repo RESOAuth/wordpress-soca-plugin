@@ -1,0 +1,148 @@
+rules:
+  - id: php-no-eval
+    languages: [php]
+    severity: ERROR
+    message: Do not execute PHP assembled at runtime.
+    pattern: eval(...)
+
+  - id: php-no-shell-execution
+    languages: [php]
+    severity: ERROR
+    message: The plugin must not launch shell commands or processes.
+    pattern-either:
+      - pattern: exec(...)
+      - pattern: shell_exec(...)
+      - pattern: system(...)
+      - pattern: passthru(...)
+      - pattern: popen(...)
+      - pattern: proc_open(...)
+      - pattern: pcntl_exec(...)
+
+  - id: php-no-unserialize
+    languages: [php]
+    severity: ERROR
+    message: Use JSON instead of deserializing PHP objects.
+    pattern: unserialize(...)
+
+  - id: php-tls-verification-required
+    languages: [php]
+    severity: ERROR
+    message: Outbound HTTPS must verify peer certificates and hostnames.
+    pattern-either:
+      - pattern: "[..., 'sslverify' => false, ...]"
+      - pattern: "[..., CURLOPT_SSL_VERIFYPEER => false, ...]"
+      - pattern: "[..., CURLOPT_SSL_VERIFYHOST => 0, ...]"
+      - pattern: curl_setopt($HANDLE, CURLOPT_SSL_VERIFYPEER, false)
+      - pattern: curl_setopt($HANDLE, CURLOPT_SSL_VERIFYHOST, 0)
+
+  - id: php-no-weak-hash
+    languages: [php]
+    severity: ERROR
+    message: Use SHA-256 or stronger for protocol hashes, and password_hash for passwords.
+    pattern-either:
+      - pattern: md5(...)
+      - pattern: sha1(...)
+      - pattern: hash('md5', ...)
+      - pattern: hash('sha1', ...)
+
+  - id: php-request-to-sql
+    languages: [php]
+    severity: ERROR
+    message: Bind request values with wpdb::prepare before using them in SQL.
+    mode: taint
+    pattern-sources:
+      - pattern: $_GET
+      - pattern: $_POST
+      - pattern: $_REQUEST
+      - pattern: $_COOKIE
+      - pattern: $_SERVER
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB->query($SQL, ...)
+              - pattern: $DB->get_var($SQL, ...)
+              - pattern: $DB->get_row($SQL, ...)
+              - pattern: $DB->get_results($SQL, ...)
+              - pattern: $DB->get_col($SQL, ...)
+          - focus-metavariable: $SQL
+    pattern-sanitizers:
+      - pattern: $DB->prepare(...)
+        exact: true
+
+  - id: php-request-to-sql-template
+    languages: [php]
+    severity: ERROR
+    message: SQL templates must be trusted; prepare cannot make a request-controlled SQL template safe.
+    mode: taint
+    pattern-sources:
+      - pattern: $_GET
+      - pattern: $_POST
+      - pattern: $_REQUEST
+      - pattern: $_COOKIE
+      - pattern: $_SERVER
+    pattern-sinks:
+      - patterns:
+          - pattern: $DB->prepare($SQL, ...)
+          - focus-metavariable: $SQL
+
+  - id: php-request-to-output
+    languages: [php]
+    severity: ERROR
+    message: Escape request data for its output context; sanitizing input alone is insufficient.
+    mode: taint
+    pattern-sources:
+      - pattern: $_GET
+      - pattern: $_POST
+      - pattern: $_REQUEST
+      - pattern: $_COOKIE
+      - pattern: $_SERVER
+    pattern-sinks:
+      - pattern: echo $VALUE;
+      - pattern: print $VALUE;
+    pattern-sanitizers:
+      - pattern: esc_html(...)
+      - pattern: esc_attr(...)
+      - pattern: esc_textarea(...)
+      - pattern: esc_url($URL)
+      - pattern: esc_url($URL, $PROTOCOLS)
+      - pattern: esc_url($URL, $PROTOCOLS, 'display')
+      - pattern: htmlspecialchars(...)
+      - pattern: htmlentities(...)
+      - pattern: wp_kses_post(...)
+      - pattern: wp_kses(...)
+      # These functions return fixed checked/selected attribute markup.
+      - pattern: checked(...)
+      - pattern: selected(...)
+
+  - id: php-request-to-redirect
+    languages: [php]
+    severity: ERROR
+    message: Use wp_safe_redirect for redirects containing request data.
+    mode: taint
+    pattern-sources:
+      - pattern: $_GET
+      - pattern: $_POST
+      - pattern: $_REQUEST
+      - pattern: $_COOKIE
+      - pattern: $_SERVER
+    pattern-sinks:
+      - patterns:
+          - pattern: wp_redirect($URL, ...)
+          - focus-metavariable: $URL
+
+  - id: php-request-to-include
+    languages: [php]
+    severity: ERROR
+    message: Never select PHP includes from request data.
+    mode: taint
+    pattern-sources:
+      - pattern: $_GET
+      - pattern: $_POST
+      - pattern: $_REQUEST
+      - pattern: $_COOKIE
+      - pattern: $_SERVER
+    pattern-sinks:
+      - pattern: include $PATH;
+      - pattern: include_once $PATH;
+      - pattern: require $PATH;
+      - pattern: require_once $PATH;

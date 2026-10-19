@@ -8,3 +8,13 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  - package-ecosystem: composer
+    directory: /tools/security
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directories:
+      - /tools/security
+      - /tools/security/semgrep
+    schedule:
+      interval: weekly
