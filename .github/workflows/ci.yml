@@ -54,7 +54,6 @@ jobs:
           docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp plugin activate simple-oauth-cimd-access
           docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp eval-file /tests/wordpress.php
           docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp soca status
-          docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp oauth-cimd status
       - name: Container logs on failure
         if: failure()
         run: docker compose -p soca-ci logs --tail=100
