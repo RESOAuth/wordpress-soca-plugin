@@ -5,6 +5,10 @@ use OCIMD\Vendor\JWT\{JWT,JWK};
 
 test('PKCE RFC 7636 vector',function(){ expect(Support::b64(hash('sha256','dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',true))==='E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'); });
 test('strict base64url and JSON limits',function(){ foreach (['a=','a+','a/','a','%%%'] as $bad) rejects(fn()=>Support::unb64($bad)); rejects(fn()=>Support::object('[]')); rejects(fn()=>Support::object(str_repeat(' ',262145))); expect(Support::unb64('e30')==='{}'); });
+test('authorization codes preserve protocol characters and reject controls',function(){
+    expect(Support::authorizationCode('abc+/=._~-')==='abc+/=._~-');
+    foreach (['', "a\r\nb", "a\tb", 'abc' . chr(127)] as $bad) rejects(fn()=>Support::authorizationCode($bad),'code');
+});
 test('public callback, metadata and JWKS routes use the new names',function(){
     $s=settings();
     expect(Metadata::callback()==='https://www.client.company.com/wp-admin/admin-post.php?action=soca_callback');

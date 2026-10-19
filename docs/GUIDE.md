@@ -2,7 +2,7 @@
 
 SOCA (Simple OAuth CIMD Access) is an open-source WordPress single sign-on plugin built and supported by RESOAuth® that can use another compatible configured provider. It uses OIDC authorization code + PKCE S256, `private_key_jwt` ES256, and self-hosted or proxy Client ID Metadata Documents (CIMD). It does **not** make WordPress an authorization server.
 
-Install the `simple-oauth-cimd-access-0.1.0.zip` release asset using **Plugins → Add Plugin → Upload Plugin**, activate it, then open **Settings → SOCA**. PHP 8.1+, OpenSSL, cURL, and WordPress 6.8+ are required. The release contains its isolated JWT dependency; Composer is not needed on the WordPress server.
+Install the `simple-oauth-cimd-access-0.1.1.zip` release asset using **Plugins → Add Plugin → Upload Plugin**, activate it, then open **Settings → SOCA**. PHP 8.1+, OpenSSL, cURL, and WordPress 6.8+ are required. The release contains its isolated JWT dependency; Composer is not needed on the WordPress server.
 
 When upgrading from the old `oauth-cimd-auth` folder, install the new ZIP, deactivate **OAuth CIMD Auth**, then activate **SOCA**. Both folders must not run together. Existing site settings and encrypted keys are retained under their original internal database names. Old issuer/subject binding rows are left in place for backup compatibility but are no longer used for login. The internal `OCIMD` PHP namespace and `ocimd_*` storage names remain for compatibility. Check the new client metadata URL and complete a fresh test login before removing the old folder.
 
@@ -51,7 +51,7 @@ Proxy substitution uses one literal `%s` in the HTTPS URL path. The new default 
 
 In proxy + inline mode, staging a new public key changes the encoded document and therefore the client identifier. Consent may repeat and pairwise subjects may change. The plugin preserves in-flight client IDs/keys; account selection still uses the current verified email. A **stable public JWKS URL** keeps encoded metadata stable across key rotation. If using an external mirror, export public keys with `wp soca jwks` and publish **both** keys; an unattended weekly rotation requires an automated mirror. No private key export is provided.
 
-WP-Cron runs maintenance hourly. Use real cron on low-traffic sites:
+WP-Cron runs maintenance hourly. With upstream login disabled, it only clears expired local transactions and does not contact the provider or CIMD proxy. When upstream login is enabled, it also checks public metadata and performs safe key rotation. Use real cron on low-traffic sites:
 
 ```sh
 wp --path=/srv/wordpress --url=https://site.example.org soca maintain

@@ -41,7 +41,7 @@ class Http {
         }
         $args = ['method'=>$form === null ? 'GET' : 'POST', 'headers'=>$headers,
             'timeout'=>12, 'redirection'=>0, 'sslverify'=>true, 'blocking'=>true,
-            'decompress'=>false, 'limit_response_size'=>262145, 'user-agent'=>'SOCA/0.1.0'];
+            'decompress'=>false, 'limit_response_size'=>262145, 'user-agent'=>'SOCA/0.1.1'];
         if ($form !== null) {
             $args['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
             $args['body'] = http_build_query($form, '', '&', PHP_QUERY_RFC3986);

@@ -11,7 +11,7 @@ final class Identity {
         return Store::locked('accounts', static function () use ($email,$s) {
             global $wpdb;
             // WordPress does not enforce unique email addresses at the database level.
-            $ids = $wpdb->get_col($wpdb->prepare("SELECT ID FROM {$wpdb->users} WHERE LOWER(user_email)=%s LIMIT 3", $email));
+            $ids = $wpdb->get_col($wpdb->prepare('SELECT ID FROM %i WHERE LOWER(user_email)=%s LIMIT 3', $wpdb->users, $email));
             Support::need(count($ids) <= 1, 'ambiguous_email', 'Multiple local accounts have this email; resolve the duplicate before login.');
             if ($ids) {
                 $user = get_user_by('id', $ids[0]);
