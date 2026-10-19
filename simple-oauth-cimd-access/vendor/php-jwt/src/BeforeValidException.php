@@ -1,6 +1,6 @@
 <?php
 
-namespace OCIMD\Vendor\JWT;
+namespace SOCA\Vendor\JWT;
 
 class BeforeValidException extends \UnexpectedValueException implements JWTExceptionWithPayloadInterface
 {

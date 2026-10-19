@@ -1,5 +1,5 @@
 <?php
-namespace OCIMD;
+namespace SOCA;
 final class Policy {
     public static function domain(string $s): string {
         $s = strtolower(trim($s));

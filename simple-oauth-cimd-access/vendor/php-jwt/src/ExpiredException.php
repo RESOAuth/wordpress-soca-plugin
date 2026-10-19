@@ -1,6 +1,6 @@
 <?php
 
-namespace OCIMD\Vendor\JWT;
+namespace SOCA\Vendor\JWT;
 
 class ExpiredException extends \UnexpectedValueException implements JWTExceptionWithPayloadInterface
 {

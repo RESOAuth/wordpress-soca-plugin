@@ -1,4 +1,4 @@
-# SOCA - Simple OAuth CIMD Access
+# Simple OAuth CIMD Access
 
 SOCA adds single sign-on to WordPress through an OpenID Connect provider that supports OAuth Client ID Metadata Documents (CIMD). It is developed by [RESOAuth](https://github.com/RESOAuth), starts with RESOAuth settings, and can be configured for another compatible provider. The plugin uses authorization code with PKCE and a signed client assertion. WordPress remains the application that receives the login; SOCA does not turn it into an authorization server.
 
@@ -13,14 +13,14 @@ SOCA adds single sign-on to WordPress through an OpenID Connect provider that su
 
 ## Install and configure
 
-Download the `simple-oauth-cimd-access-0.1.1.zip` release asset when published or build it with `python3 tools/build.py`. In WordPress, choose **Plugins → Add Plugin → Upload Plugin**, activate SOCA, then open **Settings → SOCA**. It requires WordPress 6.8+, PHP 8.1+, OpenSSL, cURL, and a public HTTPS site for self-hosted metadata. The installable ZIP contains its runtime dependency; Composer is not needed on the server.
+Download the `simple-oauth-cimd-access-0.2.0.zip` release asset when published or build it with `python3 tools/build.py`. In WordPress, choose **Plugins → Add Plugin → Upload Plugin**, activate SOCA, then open **Settings → SOCA**. It requires WordPress 6.8+, PHP 8.1+, OpenSSL, cURL, and a public HTTPS site for self-hosted metadata. The installable ZIP contains its runtime dependency; Composer is not needed on the server.
 
 1. Keep a working local administrator password and bookmark `/wp-login.php?soca_local=1`.
 2. Review the configured issuer, provider name, client metadata mode, and exact admission rules. Defaults use `https://auth.resoauth.cloud`.
 3. Run **Validate connection and documents**, then **Test login**. A document check alone does not establish successful provider login.
 4. Enable automatic redirection only after a successful real login and recovery check.
 
-The initial identity provider is the [RESOAuth hosted Smart Access Gateway](https://sag.resoauth.dev/hosted), operated by RESOAuth Ltd at `https://auth.resoauth.cloud`. Its [connection guide](https://sag.resoauth.dev/hosted/connect), [privacy notice](https://sag.resoauth.dev/hosted/privacy-notice), and [terms of service](https://sag.resoauth.dev/hosted/terms-of-service) describe the hosted service. Local development defaults to [RESOAuth Dynamic CIMD](https://dynamic-cimd.resoauth.cloud/) for public client metadata. The live RESOAuth end-user login remains unverified in the recorded test results. Synthetic provider, WordPress integration, and browser flows have been tested; no certification is claimed. See the [operator guide](docs/GUIDE.md) for migration, setup, recovery, rotation, proxy behavior, and WP-CLI commands.
+The initial identity provider is the [RESOAuth hosted Smart Access Gateway](https://sag.resoauth.dev/hosted), operated by RESOAuth Ltd at `https://auth.resoauth.cloud`. Its [connection guide](https://sag.resoauth.dev/hosted/connect), [privacy notice](https://sag.resoauth.dev/hosted/privacy-notice), and [terms of service](https://sag.resoauth.dev/hosted/terms-of-service) describe the hosted service. Local development defaults to [RESOAuth Dynamic CIMD](https://dynamic-cimd.resoauth.cloud/) for public client metadata. The live RESOAuth end-user login remains unverified in the recorded test results. Synthetic provider, WordPress integration, and browser flows have been tested; no certification is claimed. See the [operator guide](docs/GUIDE.md) for setup, recovery, rotation, proxy behavior, and WP-CLI commands.
 
 ## Documentation and support
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace OCIMD\Vendor\JWT;
+namespace SOCA\Vendor\JWT;
 
 use DomainException;
 use InvalidArgumentException;
@@ -312,7 +312,7 @@ class JWK
 
     /**
      * Encodes a value into a DER object.
-     * Also defined in OCIMD\Vendor\JWT\JWT
+     * Also defined in SOCA\Vendor\JWT\JWT
      *
      * @param   int     $type DER tag
      * @param   string  $value the value to encode

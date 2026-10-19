@@ -1,5 +1,12 @@
 # Release history
 
+## 0.2.0
+
+- Standardized the PHP and vendored JWT namespaces, hooks, options, transients and configuration constants under SOCA, and removed pre-release compatibility paths.
+- Replaced the custom transaction table with encrypted, expiring WordPress transients. Kept database advisory locks for one-time callback consumption and concurrent account/key operations.
+- Moved account lookup to WordPress user APIs and removed custom-table setup and uninstall schema changes.
+- Used `wp_safe_redirect()` for the validated authorization host, exited after redirect, and validated server input at its read boundary.
+
 ## 0.1.1
 
 - Reviewed the WordPress.org submission guidance and trimmed development documentation and evidence from the installable ZIP; the source archive retains them.
@@ -10,7 +17,7 @@
 ## 0.1.0
 
 - Prepared the plugin header, WordPress.org listing, author and package metadata for the first directory submission.
-- Moved detailed operating instructions to the guide, linked the hosted provider's docs and policies, and changed the default development metadata proxy to RESOAuth Dynamic CIMD. Saved proxy settings remain unchanged on upgrade.
+- Moved detailed operating instructions to the guide, linked the hosted provider's docs and policies, and set the default development metadata proxy to RESOAuth Dynamic CIMD.
 - Moved outbound HTTPS requests to the WordPress HTTP API, retaining public-address validation, cURL DNS pinning and strict response handling. Login policy and OIDC validation remain as in 0.0.5.
 
 ## 0.0.5
@@ -27,7 +34,7 @@
 
 ## 0.0.2
 
-- Used SOCA names consistently across recovery, diagnostics and maintenance, retained legacy compatibility, and defaulted the login button to “Continue with SSO”.
+- Used SOCA names consistently across recovery, diagnostics and maintenance, and defaulted the login button to “Continue with SSO”.
 
 ## 0.0.1
 

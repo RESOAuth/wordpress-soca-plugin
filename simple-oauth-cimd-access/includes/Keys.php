@@ -1,6 +1,6 @@
 <?php
-namespace OCIMD;
-use OCIMD\Vendor\JWT\JWT;
+namespace SOCA;
+use SOCA\Vendor\JWT\JWT;
 final class Keys {
     public static function generate(int $now): array {
         $key = openssl_pkey_new(['private_key_type'=>OPENSSL_KEYTYPE_EC, 'curve_name'=>'prime256v1']);
@@ -12,10 +12,10 @@ final class Keys {
         return ['kid'=>$kid, 'public'=>$public+['kid'=>$kid,'use'=>'sig','alg'=>'ES256'], 'private'=>$pem, 'created'=>$now, 'published'=>0, 'context'=>'', 'retired'=>0, 'retire_after'=>0];
     }
     public static function get(): array {
-        $sealed = get_option('ocimd_keys');
+        $sealed = get_option('soca_keys');
         if (!$sealed) {
             return Store::locked('keys/' . get_current_blog_id(), static function () {
-                $existing = get_option('ocimd_keys'); if ($existing) { return Store::open($existing); }
+                $existing = get_option('soca_keys'); if ($existing) { return Store::open($existing); }
                 $now = time(); $a = self::generate($now); $b = self::generate($now);
                 $keys = ['active'=>$a['kid'], 'since'=>$now, 'items'=>[$a,$b]];
                 self::save($keys); return $keys;
@@ -23,7 +23,7 @@ final class Keys {
         }
         return Store::open($sealed);
     }
-    private static function save(array $keys): void { update_option('ocimd_keys', Store::seal($keys), false); }
+    private static function save(array $keys): void { update_option('soca_keys', Store::seal($keys), false); }
     public static function jwks(?array $keys = null): array {
         $items = array_column(($keys ?? self::get())['items'], 'public');
         usort($items, static fn($a,$b)=>strcmp($a['kid'],$b['kid']));
