@@ -1,0 +1,42 @@
+{
+  "requested_url": "https://path2json.olliejc.workers.dev/eyJjbGllbnRfbmFtZSI6IlNpbXBsZSBPQXV0aCBDSU1EIEFjY2VzcyB2YWxpZGF0aW9uIGZpeHR1cmUiLCJyZWRpcmVjdF91cmlzIjpbImh0dHBzOi8vbG9jYWxob3N0Ojg0NDMvd3AtYWRtaW4vYWRtaW4tcG9zdC5waHA_YWN0aW9uPXNvY2FfY2FsbGJhY2siXSwicmVzcG9uc2VfdHlwZXMiOlsiY29kZSJdLCJncmFudF90eXBlcyI6WyJhdXRob3JpemF0aW9uX2NvZGUiXSwic2NvcGUiOiJvcGVuaWQgZW1haWwgcHJvZmlsZSIsInRva2VuX2VuZHBvaW50X2F1dGhfbWV0aG9kIjoicHJpdmF0ZV9rZXlfand0IiwidG9rZW5fZW5kcG9pbnRfYXV0aF9zaWduaW5nX2FsZyI6IkVTMjU2IiwiandrcyI6eyJrZXlzIjpbeyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IjRPUzFETlJGRHlwZFIyRDNoN0JZLWJqNmV6czdhQVVEbHc4U2Vqa0xta1EiLCJ5IjoiQko5ZnFPSDFPdkloY1pNVlNrc0pHM0p5bXZuYm5BWmxCZFNYeFQxeUZaZyIsImtpZCI6IlVnb2dxMWJpM0FHT1JEcUd6MDBkem1IQnQwcXB4NnN4TUV0cVlxckJZQ2siLCJ1c2UiOiJzaWciLCJhbGciOiJFUzI1NiJ9LHsiY3J2IjoiUC0yNTYiLCJrdHkiOiJFQyIsIngiOiJ3N0pVaHZvSWJvLWM2S0gteEh0ZEtXWWtMWmZsMjdLaF9aV1ZxUDdlWjZVIiwieSI6IlpUWDF1dFZONlFXUXRrNlh2T0Z2bjd2bWw0c1VseGNyNDQ2VkxtTnM3VW8iLCJraWQiOiJzckJ2UnJRd1F1d2dtUVlBN0w1WkFxN2hKdGl1U251ZV9JeGljcjcxSDNRIiwidXNlIjoic2lnIiwiYWxnIjoiRVMyNTYifV19fQ/add_client_id/client.json",
+  "document": {
+    "client_name": "Simple OAuth CIMD Access validation fixture",
+    "redirect_uris": [
+      "https://localhost:8443/wp-admin/admin-post.php?action=soca_callback"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "grant_types": [
+      "authorization_code"
+    ],
+    "scope": "openid email profile",
+    "token_endpoint_auth_method": "private_key_jwt",
+    "token_endpoint_auth_signing_alg": "ES256",
+    "jwks": {
+      "keys": [
+        {
+          "crv": "P-256",
+          "kty": "EC",
+          "x": "4OS1DNRFDypdR2D3h7BY-bj6ezs7aAUDlw8SejkLmkQ",
+          "y": "BJ9fqOH1OvIhcZMVSksJG3JymvnbnAZlBdSXxT1yFZg",
+          "kid": "Ugogq1bi3AGORDqGz00dzmHBt0qpx6sxMEtqYqrBYCk",
+          "use": "sig",
+          "alg": "ES256"
+        },
+        {
+          "crv": "P-256",
+          "kty": "EC",
+          "x": "w7JUhvoIbo-c6KH-xHtdKWYkLZfl27Kh_ZWVqP7eZ6U",
+          "y": "ZTX1utVN6QWQtk6XvOFvn7vml4sUlxcr446VLmNs7Uo",
+          "kid": "srBvRrQwQuwgmQYA7L5ZAq7hJtiuSnue_Ixicr71H3Q",
+          "use": "sig",
+          "alg": "ES256"
+        }
+      ]
+    },
+    "client_id": "https://path2json.olliejc.workers.dev/eyJjbGllbnRfbmFtZSI6IlNpbXBsZSBPQXV0aCBDSU1EIEFjY2VzcyB2YWxpZGF0aW9uIGZpeHR1cmUiLCJyZWRpcmVjdF91cmlzIjpbImh0dHBzOi8vbG9jYWxob3N0Ojg0NDMvd3AtYWRtaW4vYWRtaW4tcG9zdC5waHA_YWN0aW9uPXNvY2FfY2FsbGJhY2siXSwicmVzcG9uc2VfdHlwZXMiOlsiY29kZSJdLCJncmFudF90eXBlcyI6WyJhdXRob3JpemF0aW9uX2NvZGUiXSwic2NvcGUiOiJvcGVuaWQgZW1haWwgcHJvZmlsZSIsInRva2VuX2VuZHBvaW50X2F1dGhfbWV0aG9kIjoicHJpdmF0ZV9rZXlfand0IiwidG9rZW5fZW5kcG9pbnRfYXV0aF9zaWduaW5nX2FsZyI6IkVTMjU2IiwiandrcyI6eyJrZXlzIjpbeyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IjRPUzFETlJGRHlwZFIyRDNoN0JZLWJqNmV6czdhQVVEbHc4U2Vqa0xta1EiLCJ5IjoiQko5ZnFPSDFPdkloY1pNVlNrc0pHM0p5bXZuYm5BWmxCZFNYeFQxeUZaZyIsImtpZCI6IlVnb2dxMWJpM0FHT1JEcUd6MDBkem1IQnQwcXB4NnN4TUV0cVlxckJZQ2siLCJ1c2UiOiJzaWciLCJhbGciOiJFUzI1NiJ9LHsiY3J2IjoiUC0yNTYiLCJrdHkiOiJFQyIsIngiOiJ3N0pVaHZvSWJvLWM2S0gteEh0ZEtXWWtMWmZsMjdLaF9aV1ZxUDdlWjZVIiwieSI6IlpUWDF1dFZONlFXUXRrNlh2T0Z2bjd2bWw0c1VseGNyNDQ2VkxtTnM3VW8iLCJraWQiOiJzckJ2UnJRd1F1d2dtUVlBN0w1WkFxN2hKdGl1U251ZV9JeGljcjcxSDNRIiwidXNlIjoic2lnIiwiYWxnIjoiRVMyNTYifV19fQ/add_client_id/client.json"
+  },
+  "checked_at": "2026-10-19"
+}

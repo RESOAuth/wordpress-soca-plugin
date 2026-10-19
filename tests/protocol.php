@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/bootstrap.php';
-use OCIMD\{Support,Policy,Http,Settings,Metadata,Provider,Keys,Store};
-use OCIMD\Vendor\JWT\{JWT,JWK};
+use SOCA\{Support,Policy,Http,Settings,Metadata,Provider,Keys,Store};
+use SOCA\Vendor\JWT\{JWT,JWK};
 
 test('PKCE RFC 7636 vector',function(){ expect(Support::b64(hash('sha256','dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',true))==='E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'); });
 test('strict base64url and JSON limits',function(){ foreach (['a=','a+','a/','a','%%%'] as $bad) rejects(fn()=>Support::unb64($bad)); rejects(fn()=>Support::object('[]')); rejects(fn()=>Support::object(str_repeat(' ',262145))); expect(Support::unb64('e30')==='{}'); });
@@ -43,12 +43,10 @@ test('allow any verified email overrides allowlists but never deny rules',functi
     foreach (['*.company.com','company.com.','company.com/','@company.com','localhost','127.0.0.1','аpple.com'] as $v) rejects(fn()=>Policy::domain($v));
 });
 test('public HTTPS defaults enable self-hosted login for the exact hostname',function(){ $s=Settings::defaults();expect($s['allow_domains']===['client.company.com'] && $s['mode']==='self' && $s['key_mode']==='uri' && $s['enabled'] && !$s['unrestricted'] && $s['assertion_audience']==='issuer' && $s['button']==='Continue with SSO' && $s['proxy']==='https://dynamic-cimd.resoauth.cloud/cimd/%s'); });
-test('upgrade preserves effective allowlist policy and explicit unrestricted access',function(){
-    $old=Settings::defaults();$old['unrestricted']=true;$old['trust_email']=true;$revision=$old['revision'];
-    update_option('ocimd_settings',$old);$new=Settings::get();
-    expect(!$new['unrestricted'] && $new['allow_domains']===$old['allow_domains'] && !isset($new['trust_email']) && $new['revision']!==$revision);
-    $old['allow_domains']=[];$old['cimd_confirmed']=true;unset($old['assertion_audience']);update_option('ocimd_settings',$old);
-    $new=Settings::get();expect($new['unrestricted'] && !isset($new['cimd_confirmed']) && $new['assertion_audience']==='token_endpoint');delete_option('ocimd_settings');
+test('settings initialize with current names and defaults',function(){
+    $s=Settings::get();
+    expect($s['assertion_audience']==='issuer' && is_array(get_option('soca_settings')));
+    delete_option('soca_settings');
 });
 test('local destinations cannot escape origin or point into login loop',function(){ foreach (['//evil.com','https://evil.com/','https://www.client.company.com.evil.org/', 'https://www.client.company.com:444/a','https://www.client.company.com/wp-login.php'] as $v) expect(Support::destination($v)===home_url('/'));expect(Support::destination('/welcome')==='https://www.client.company.com/welcome'); });
 test('discovery OIDC and capability failures never downgrade',function(){
@@ -63,7 +61,7 @@ test('client document exact identity and private material',function(){
     $bad=$d;$bad['redirect_uris']=['https://evil.com/cb'];rejects(fn()=>Metadata::validateDocument($d,$bad));
 });
 test('client key storage encryption, tampering, thumbprints and JWT assertion',function(){
-    $keys=Keys::get();expect(count($keys['items'])===2);expect(!str_contains(get_option('ocimd_keys'),'PRIVATE KEY'));Metadata::noPrivateKeys(Keys::jwks());
+    $keys=Keys::get();expect(count($keys['items'])===2);expect(!str_contains(get_option('soca_keys'),'PRIVATE KEY'));Metadata::noPrivateKeys(Keys::jwks());
     $pub=$keys['items'][0]['public'];$ordered=array_intersect_key($pub,array_flip(['crv','kty','x','y']));expect($pub['kid']===Support::b64(hash('sha256',Support::json($ordered),true)));
     $sealed=Store::seal(['private'=>'secret']);expect(Store::open($sealed)['private']==='secret');$sealed[20]=$sealed[20]==='A'?'B':'A';rejects(fn()=>Store::open($sealed),'encryption');
     $jwt=Keys::assertion($keys['active'],'https://client.company.com/meta','https://provider.company.com/token');$parsed=JWT::decode($jwt,JWK::parseKeySet(Keys::jwks(),'ES256'));expect($parsed->iss===$parsed->sub && $parsed->exp-$parsed->iat===60 && strlen($parsed->jti)===43);
@@ -141,9 +139,9 @@ test('issuer audience is used when configured for client authentication',functio
     expect((new Provider($http))->exchange($tx,'test-code')['sub']==='subject-1');
 });
 test('token HTTP refusal has a distinct redacted audit reason',function(){
-    $tx=transaction();$http=new FixtureHttp(fn()=>throw new \OCIMD\Failure('http_status','HTTPS endpoint must return 200 (received 401).',['http_status'=>401]));
+    $tx=transaction();$http=new FixtureHttp(fn()=>throw new \SOCA\Failure('http_status','HTTPS endpoint must return 200 (received 401).',['http_status'=>401]));
     try {(new Provider($http))->exchange($tx,'test-code');throw new \RuntimeException('Expected token refusal.');}
-    catch (\OCIMD\Failure $e) {expect($e->reason==='token_http_status' && $e->diagnostics['http_status']===401);}
+    catch (\SOCA\Failure $e) {expect($e->reason==='token_http_status' && $e->diagnostics['http_status']===401);}
 });
 test('query values are encoded without parameter injection',function(){
     $url=Support::query('https://provider.company.com/auth?tenant=one',['client_id'=>'https://proxy.company.com/meta?a=1&b=2','redirect_uri'=>'https://client.company.com/cb?action=oauth&x=y']);

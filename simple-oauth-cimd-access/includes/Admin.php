@@ -1,24 +1,24 @@
 <?php
-namespace OCIMD;
+namespace SOCA;
 final class Admin {
     public static function boot(): void {
-        add_action('admin_menu', static function () { add_options_page('SOCA - Simple OAuth CIMD Access','SOCA','manage_options','simple-oauth-cimd-access',[self::class,'page']); });
+        add_action('admin_menu', static function () { add_options_page('Simple OAuth CIMD Access','SOCA','manage_options','simple-oauth-cimd-access',[self::class,'page']); });
         add_action('admin_enqueue_scripts', static function ($hook) {
             if ($hook==='settings_page_simple-oauth-cimd-access') {
-                wp_enqueue_script('soca-admin',plugins_url('assets/admin.js',SOCA_FILE),[], '0.0.5',true);
-                wp_enqueue_style('soca-admin',plugins_url('assets/admin.css',SOCA_FILE),[], '0.0.5');
+                wp_enqueue_script('soca-admin',plugins_url('assets/admin.js',SOCA_FILE),[], '0.2.0',true);
+                wp_enqueue_style('soca-admin',plugins_url('assets/admin.css',SOCA_FILE),[], '0.2.0');
             }
         });
         add_filter('site_status_tests',static function ($tests) { $tests['direct']['soca']=['label'=>'SOCA','test'=>[self::class,'health']]; return $tests; });
         add_filter('debug_information',static function ($info) {
-            $s=Settings::get(); $info['soca']=['label'=>'SOCA - Simple OAuth CIMD Access','fields'=>[
-                'version'=>['label'=>'Version','value'=>'0.0.5'], 'mode'=>['label'=>'Metadata mode','value'=>$s['mode']],
+            $s=Settings::get(); $info['soca']=['label'=>'Simple OAuth CIMD Access','fields'=>[
+                'version'=>['label'=>'Version','value'=>'0.2.0'], 'mode'=>['label'=>'Metadata mode','value'=>$s['mode']],
                 'enabled'=>['label'=>'Enabled','value'=>$s['enabled'] && !Settings::disabled()?'yes':'no'],
                 'cron'=>['label'=>'Maintenance','value'=>wp_next_scheduled('soca_maintenance')?'scheduled':'missing']]]; return $info;
         });
     }
     public static function health(): array {
-        $m=get_option('ocimd_maintenance_status',[]); $s=Settings::get();
+        $m=get_option('soca_maintenance_status',[]); $s=Settings::get();
         $ok=$s['enabled'] && !Settings::disabled() && !empty($m['ok']) && ($m['time']??0)>time()-7200;
         try { $k=Keys::get(); $ok=$ok && $k['since']>time()-691200; } catch (\Throwable $e) { $ok=false; }
         return ['label'=>$ok?'SOCA publication and maintenance are current':'SOCA needs setup or maintenance review',
@@ -40,8 +40,8 @@ final class Admin {
     public static function page(): void {
         if (!current_user_can('manage_options')) { return; }
         $notice=''; $error=false; $result=null; $policyResult=null; $policyEmail=''; $policyVerified=true; $action='';
-        if (($_SERVER['REQUEST_METHOD']??'')==='POST') {
-            check_admin_referer('ocimd_settings');
+        if (Support::serverString('REQUEST_METHOD') === 'POST') {
+            check_admin_referer('soca_settings');
             try {
                 $action=Support::scalar($_POST,'operation',20);
                 if ($action==='save') { Settings::save(wp_unslash($_POST)); $notice='Settings saved. Run connection validation, then test login.'; }
@@ -58,18 +58,18 @@ final class Admin {
             }
         }
         $s=Settings::get();
-        echo '<div class="wrap soca"><h1>SOCA - Simple OAuth CIMD Access</h1>';
+        echo '<div class="wrap soca"><h1>Simple OAuth CIMD Access</h1>';
         echo '<p>SOCA is an open-source WordPress single sign-on (SSO) plugin built and supported by RESOAuth®. You can configure another compatible provider. OAuth handles the secure authorization-code redirect, OpenID Connect (OIDC) verifies who signed in, and a Client ID Metadata Document (CIMD) publishes this site’s client details and public keys to compatible providers. <a href="https://openid.net/specs/openid-connect-core-1_0.html">About OIDC</a> · <a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document">About CIMD</a>.</p>';
         echo '<p>The provider and site defaults are ready to review. Save any changes, validate the connection and try a test login. Local WordPress login remains available. The default issuer is the <a href="https://sag.resoauth.dev/hosted">RESOAuth hosted gateway</a>; review its <a href="https://sag.resoauth.dev/hosted/privacy-notice">privacy notice</a> and <a href="https://sag.resoauth.dev/hosted/terms-of-service">terms of service</a>.</p>';
         if ($notice) { echo '<div role="status" class="notice ' . ($error?'notice-error':'notice-success') . '"><p>' . esc_html($notice) . '</p></div>'; }
-        $test=get_transient('ocimd_test_' . get_current_user_id());
+        $test=get_transient('soca_test_' . get_current_user_id());
         if ($test) { echo '<div class="notice notice-success"><p>Test login: cryptographic OIDC validation succeeded. Admission policy: ' . esc_html($test['message']) . ' No account or session was changed.</p></div>'; }
         if (Settings::disabled()) { echo '<div class="notice notice-warning"><p>SOCA is disabled by configuration. Upstream login is disabled.</p></div>'; }
         $host=(string)wp_parse_url(home_url('/'),PHP_URL_HOST);
         if (Support::localHost($host)) { echo '<div class="notice notice-info"><p>Local development detected. Use HTTPS with a certificate your browser trusts. Proxy + inline public keys are selected because a cloud provider cannot fetch localhost metadata or JWKS. Add an allowed email/domain or select Allow any verified email, then enable login. Rotating inline keys changes the client identifier and may require fresh provider consent.</p></div>'; }
         $recoveryUrl=Plugin::recoveryUrl();
         echo '<p><strong>Recovery URL:</strong> <a href="' . esc_url($recoveryUrl) . '">' . esc_html($recoveryUrl) . '</a></p>';
-        echo '<form method="post">'; wp_nonce_field('ocimd_settings'); echo '<input type="hidden" name="operation" value="save"><h2>Provider and public metadata</h2><table class="form-table">';
+        echo '<form method="post">'; wp_nonce_field('soca_settings'); echo '<input type="hidden" name="operation" value="save"><h2>Provider and public metadata</h2><table class="form-table">';
         self::input('provider','Provider display name',$s);
         self::input('button','Login button label',$s,'Edit this label when changing provider.');
         self::input('issuer','Exact issuer',$s,'HTTPS issuer from the provider. Never inferred from email or incoming requests.','url');
@@ -98,12 +98,12 @@ final class Admin {
         foreach (['Callback'=>Metadata::callback(),'Self-hosted metadata'=>Metadata::url(),'Public JWKS'=>Metadata::jwksUrl()] as $label=>$url) { echo '<dt><strong>' . esc_html($label) . '</strong></dt><dd><code>' . esc_html($url) . '</code></dd>'; }
         try { $client=Metadata::clientId($s); echo '<dt><strong>Current client identifier</strong></dt><dd><code>' . esc_html($client) . '</code></dd></dl><details><summary>Public metadata preview</summary><pre>' . esc_html(json_encode(Metadata::document($s),JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) . '</pre></details>'; }
         catch (\Throwable $e) { echo '</dl><p>Preview is unavailable; review the configuration and encryption keys.</p>'; }
-        echo '<form method="post">'; wp_nonce_field('ocimd_settings'); echo '<input type="hidden" name="operation" value="check">'; submit_button('Validate connection and documents','secondary'); echo '</form>';
-        $testUrl=wp_nonce_url(add_query_arg(['action'=>'soca_start','purpose'=>'test'],admin_url('admin-post.php')),'ocimd_test');
+        echo '<form method="post">'; wp_nonce_field('soca_settings'); echo '<input type="hidden" name="operation" value="check">'; submit_button('Validate connection and documents','secondary'); echo '</form>';
+        $testUrl=wp_nonce_url(add_query_arg(['action'=>'soca_start','purpose'=>'test'],admin_url('admin-post.php')),'soca_test');
         echo '<p><a class="button button-secondary" href="' . esc_url($testUrl) . '">Test login (keeps this admin session)</a></p><p>The provider must accept this client’s redirect origin, inline JWKS if selected, and key refresh policy. A document check alone does not establish these capabilities.</p>';
         if ($result) { echo '<pre>' . esc_html(json_encode($result,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) . '</pre>'; }
         echo '<h2 id="soca-access-test">Test access rules</h2><p id="soca-access-test-help">Check an email against the saved <a href="#soca-access-rules">Access rules</a> above. Unsaved edits are not included; deny rules always win.</p>';
-        echo '<form id="soca-access-test-form" method="post" action="#soca-access-test">'; wp_nonce_field('ocimd_settings');
+        echo '<form id="soca-access-test-form" method="post" action="#soca-access-test">'; wp_nonce_field('soca_settings');
         echo '<input type="hidden" name="operation" value="policy"><div class="soca-access-test-row"><label for="test_email">Email to test</label><input id="test_email" name="test_email" type="email" value="' . esc_attr($policyEmail) . '" aria-describedby="soca-access-test-help" required>';
         echo '<label><input type="checkbox" name="verified" value="1" ' . checked($policyVerified,true,false) . '> Verified by provider</label><button type="submit" class="button button-secondary">Explain access decision</button>';
         if ($policyResult) {
@@ -113,6 +113,6 @@ final class Admin {
         echo '<h2>Operations</h2><p>Signing keys rotate weekly after the replacement has been published for the cache safety window. Old keys remain for the window plus 12 minutes. A missed cron or unreachable mirror delays rotation. Keep WordPress salts stable, protect database backups, and run <code>wp soca maintain</code> hourly using real cron on low-traffic sites.</p>';
         echo '<p>To recover, use the recovery URL above, <code>wp soca disable</code>, or set <code>define(\'SOCA_DISABLED\', true);</code> in wp-config.php. A failed login shows a reference that matches a redacted audit event below. Logout ends the WordPress session only.</p>';
         try { echo '<details><summary>Key publication and maintenance details</summary><pre>' . esc_html(json_encode(Plugin::status(),JSON_PRETTY_PRINT)) . '</pre></details>'; } catch (\Throwable $e) { echo '<p>Cannot read keys. Restore encryption configuration from backup.</p>'; }
-        echo '<details><summary>Recent redacted audit events (last 100)</summary><p>Match the reference from the login page to a <code>login_failed</code> event. Its flow, step and reason identify where the attempt stopped. HTTP status appears when an endpoint responds with an error. A <code>transaction</code> failure occurs before token exchange; <code>token_exchange</code> and later steps show how far the callback progressed. Events contain no email, subject, token or provider response body.</p><pre>' . esc_html(json_encode(get_option('ocimd_audit',[]),JSON_PRETTY_PRINT)) . '</pre></details></div>';
+        echo '<details><summary>Recent redacted audit events (last 100)</summary><p>Match the reference from the login page to a <code>login_failed</code> event. Its flow, step and reason identify where the attempt stopped. HTTP status appears when an endpoint responds with an error. A <code>transaction</code> failure occurs before token exchange; <code>token_exchange</code> and later steps show how far the callback progressed. Events contain no email, subject, token or provider response body.</p><pre>' . esc_html(json_encode(get_option('soca_audit',[]),JSON_PRETTY_PRINT)) . '</pre></details></div>';
     }
 }

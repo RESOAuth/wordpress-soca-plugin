@@ -1,5 +1,5 @@
 <?php
-namespace OCIMD;
+namespace SOCA;
 final class Plugin {
     public static function boot(): void {
         add_action('init', [self::class,'initialize'], 0);
@@ -12,42 +12,37 @@ final class Plugin {
         add_action('login_form', static function () { echo self::button(Support::scalar(wp_unslash($_GET), 'redirect_to')); }); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- button() escapes its markup.
         add_action('login_init', [self::class,'automatic']);
         add_filter('login_message', static function ($message) {
-            if (isset($_GET['soca_error']) || isset($_GET['oauth_cimd_error'])) {
-                $errorRef = wp_unslash($_GET['soca_error'] ?? '');
-                $ref = is_string($errorRef) && preg_match('/^[a-f0-9]{12}$/D', $errorRef) ? $errorRef : '';
+            if (isset($_GET['soca_error'])) {
+                $errorRef = sanitize_text_field(wp_unslash($_GET['soca_error'] ?? ''));
+                $ref = preg_match('/^[a-f0-9]{12}$/D', $errorRef) ? $errorRef : '';
                 $message .= '<p class="message">SOCA login did not complete. You can retry or use your local account. An administrator can review the redacted audit events.' . ($ref ? ' Reference: <code>' . esc_html($ref) . '</code>.' : '') . '</p>';
             }
             return $message;
         });
         add_filter('logout_redirect', static fn($url)=>self::recoveryUrl(), 99);
         add_action('soca_maintenance', [self::class,'maintenance']);
-        add_action('ocimd_maintenance', [self::class,'maintenance']); // Existing scheduled events.
         Admin::boot();
         if (defined('WP_CLI') && WP_CLI) {
             $cli = static function ($args) {
                 $command = $args[0] ?? 'status';
                 try {
-                    if ($command === 'disable') { $s=Settings::get(); $s['enabled']=false; $s['automatic']=false; $s['revision']=Support::random(); update_option('ocimd_settings',$s,false); \WP_CLI::success('SOCA login disabled.'); }
+                    if ($command === 'disable') { $s=Settings::get(); $s['enabled']=false; $s['automatic']=false; $s['revision']=Support::random(); update_option('soca_settings',$s,false); \WP_CLI::success('SOCA login disabled.'); }
                     elseif ($command === 'check') { \WP_CLI::log(Support::json(self::check())); }
-                    elseif ($command === 'maintain') { self::maintenance(); \WP_CLI::log(Support::json(get_option('ocimd_maintenance_status',[]))); }
+                    elseif ($command === 'maintain') { self::maintenance(); \WP_CLI::log(Support::json(get_option('soca_maintenance_status',[]))); }
                     elseif ($command === 'status') { \WP_CLI::log(Support::json(self::status())); }
                     elseif ($command === 'jwks') { \WP_CLI::log(Support::json(Keys::jwks())); }
-                    elseif ($command === 'audit') { \WP_CLI::log(Support::json(get_option('ocimd_audit',[]))); }
+                    elseif ($command === 'audit') { \WP_CLI::log(Support::json(get_option('soca_audit',[]))); }
                     else { \WP_CLI::error('Usage: wp soca <status|check|maintain|disable|jwks|audit>. Select a multisite site using --url.'); }
                 } catch (\Throwable $e) { \WP_CLI::error($e instanceof Failure ? $e->getMessage() : 'Internal failure; inspect the runtime configuration.'); }
             };
             \WP_CLI::add_command('soca', $cli);
-            \WP_CLI::add_command('oauth-cimd', $cli); // Preserve existing maintenance jobs.
         }
     }
     /** Dependency injection for trusted WordPress integrations and deterministic protocol fixtures. */
     public static function http(): Http {
-        $http = apply_filters('oauth_cimd_auth_http', new Http());
-        return apply_filters('soca_http', $http);
+        return apply_filters('soca_http', new Http());
     }
     public static function initialize(): void {
-        if (!get_option('ocimd_schema')) { Store::install(); }
-        if (wp_next_scheduled('ocimd_maintenance')) { wp_clear_scheduled_hook('ocimd_maintenance'); }
         if (!wp_next_scheduled('soca_maintenance')) { wp_schedule_event(time()+60, 'hourly', 'soca_maintenance'); }
     }
     public static function activate(bool $network = false): void {
@@ -57,19 +52,20 @@ final class Plugin {
     }
     public static function deactivate(bool $network = false): void {
         if ($network && is_multisite()) {
-            foreach (get_sites(['fields'=>'ids','number'=>0]) as $id) { switch_to_blog($id); wp_clear_scheduled_hook('soca_maintenance'); wp_clear_scheduled_hook('ocimd_maintenance'); restore_current_blog(); }
-        } else { wp_clear_scheduled_hook('soca_maintenance'); wp_clear_scheduled_hook('ocimd_maintenance'); }
+            foreach (get_sites(['fields'=>'ids','number'=>0]) as $id) { switch_to_blog($id); wp_clear_scheduled_hook('soca_maintenance'); restore_current_blog(); }
+        } else { wp_clear_scheduled_hook('soca_maintenance'); }
     }
     public static function documents(): void {
         if (!isset($_GET['soca_doc'])) { return; }
-        if (!in_array($_SERVER['REQUEST_METHOD'] ?? '', ['GET','HEAD'], true)) { status_header(405); exit; }
+        $method = Support::serverString('REQUEST_METHOD');
+        if (!in_array($method, ['GET','HEAD'], true)) { status_header(405); exit; }
         try {
             $kind = Support::scalar(wp_unslash($_GET),'soca_doc');
             Support::need(in_array($kind,['client','jwks'],true), 'document', 'Unknown public document.');
             $doc = $kind === 'jwks' ? Keys::jwks() : Metadata::document(Settings::get(), true);
             header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: public, max-age=300, must-revalidate');
             header('X-Content-Type-Options: nosniff'); header('Access-Control-Allow-Origin: *');
-            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'HEAD') { echo Support::json($doc); } exit; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON response, not HTML.
+            if ($method !== 'HEAD') { echo Support::json($doc); } exit; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON response, not HTML.
         } catch (\Throwable $e) { status_header(503); header('Cache-Control: no-store'); header('Content-Type: application/json'); echo '{"error":"metadata_unavailable"}'; exit; }
     }
     public static function button(string $destination = ''): string {
@@ -84,13 +80,15 @@ final class Plugin {
     }
     public static function automatic(): void {
         $s = Settings::get();
-        if (!$s['enabled'] || !$s['automatic'] || Settings::disabled() || is_user_logged_in() || ($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') { return; }
+        if (!$s['enabled'] || !$s['automatic'] || Settings::disabled() || is_user_logged_in() || Support::serverString('REQUEST_METHOD') !== 'GET') { return; }
         // A narrow allowlist preserves recovery, reset, logout, interim, reauth and plugin-specific flows.
         if (array_diff(array_keys($_GET), ['redirect_to','action']) || (isset($_GET['action']) && $_GET['action'] !== 'login')) { return; }
         wp_safe_redirect(Support::query(admin_url('admin-post.php'), ['action'=>'soca_start','redirect_to'=>Support::destination(Support::scalar(wp_unslash($_GET),'redirect_to'))])); exit;
     }
     private static function rate(string $purpose, int $limit): void {
-        $key = 'ocimd_rate_' . hash_hmac('sha256', $purpose . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'), wp_salt('nonce'));
+        $address = Support::serverString('REMOTE_ADDR');
+        $ip = filter_var($address, FILTER_VALIDATE_IP);
+        $key = 'soca_rate_' . hash_hmac('sha256', $purpose . ($ip !== false ? $ip : 'unknown'), wp_salt('nonce'));
         Store::locked($key, static function () use ($key,$limit) {
             $record = get_transient($key) ?: ['count'=>0,'until'=>time()+600];
             Support::need($record['count'] < $limit, 'rate_limit', 'Too many attempts; wait ten minutes.');
@@ -103,37 +101,37 @@ final class Plugin {
         $result=['time'=>time(),'revision'=>$s['revision'],'context'=>$context,'issuer'=>$d['issuer'],'authorization_endpoint'=>$d['authorization_endpoint'],
             'token_endpoint'=>$d['token_endpoint'],'jwks_uri'=>$d['jwks_uri'],'cimd_advertised'=>($d['client_id_metadata_document_supported']??false)===true,
             'client_id'=>Metadata::clientId($s),'result'=>'Discovery and public documents validated. Complete a test login to verify interoperability.'];
-        update_option('ocimd_checked',$result,false); return $result;
+        update_option('soca_checked',$result,false); return $result;
     }
     public static function maintenance(): void {
         try {
-            Store::clean(); $s=Settings::get();
+            $s=Settings::get();
             if (!$s['enabled'] || Settings::disabled()) {
-                update_option('ocimd_maintenance_status',['time'=>time(),'ok'=>true,'code'=>'login_disabled'],false);
+                update_option('soca_maintenance_status',['time'=>time(),'ok'=>true,'code'=>'login_disabled'],false);
                 return;
             }
             $context=Metadata::validate($s,self::http()); Keys::rotate($s,$context);
-            update_option('ocimd_maintenance_status',['time'=>time(),'ok'=>true,'code'=>'publication_checked'],false);
-        } catch (\Throwable $e) { update_option('ocimd_maintenance_status',['time'=>time(),'ok'=>false,'code'=>$e instanceof Failure?$e->reason:'internal_error'],false); Support::audit('maintenance_failed'); }
+            update_option('soca_maintenance_status',['time'=>time(),'ok'=>true,'code'=>'publication_checked'],false);
+        } catch (\Throwable $e) { update_option('soca_maintenance_status',['time'=>time(),'ok'=>false,'code'=>$e instanceof Failure?$e->reason:'internal_error'],false); Support::audit('maintenance_failed'); }
     }
     public static function status(): array {
         $s=Settings::get(); $k=Keys::get();
         return ['enabled'=>$s['enabled'] && !Settings::disabled(),'mode'=>$s['mode'],'key_mode'=>$s['key_mode'],'active_kid'=>$k['active'],
             'active_since'=>$k['since'],'public_keys'=>array_map(static fn($x)=>array_intersect_key($x,array_flip(['kid','published','retired'])), $k['items']),
-            'maintenance'=>get_option('ocimd_maintenance_status',[]),'next_cron'=>wp_next_scheduled('soca_maintenance'),
+            'maintenance'=>get_option('soca_maintenance_status',[]),'next_cron'=>wp_next_scheduled('soca_maintenance'),
             'inline_client_id_changes'=>$s['mode']==='proxy' && $s['key_mode']==='inline'];
     }
-    private static function userAgentHash(): string { return hash('sha256', is_string($_SERVER['HTTP_USER_AGENT'] ?? null) ? $_SERVER['HTTP_USER_AGENT'] : ''); }
+    private static function userAgentHash(): string { return hash('sha256', Support::serverString('HTTP_USER_AGENT')); }
     public static function start(): void {
         $ref = bin2hex(random_bytes(6)); $flow = 'login'; $step = 'request';
         try {
-            Support::need(($_SERVER['REQUEST_METHOD']??'')==='GET','method','Login must start with GET.');
+            Support::need(Support::serverString('REQUEST_METHOD')==='GET','method','Login must start with GET.');
             $purpose=Support::scalar(wp_unslash($_GET),'purpose',20) ?: 'login';
             Support::need(in_array($purpose,['login','test'],true),'purpose','Invalid login purpose.');
             $flow = $purpose;
             if ($purpose==='test') {
                 Support::need(current_user_can('manage_options'),'authorization','Administrator access required.');
-                Support::need((bool) wp_verify_nonce(Support::scalar(wp_unslash($_GET),'_wpnonce',100), 'ocimd_test'), 'nonce', 'Invalid test-login nonce.');
+                Support::need((bool) wp_verify_nonce(Support::scalar(wp_unslash($_GET),'_wpnonce',100), 'soca_test'), 'nonce', 'Invalid test-login nonce.');
             }
             self::begin($purpose,$ref,$step);
         } catch (\Throwable $e) { self::fail($e,$flow,$step,$ref); }
@@ -144,10 +142,10 @@ final class Plugin {
         Support::need($s['enabled'] || $purpose!=='login','disabled','Upstream login is not enabled.'); self::rate('start',30);
         Support::need(is_ssl() && wp_parse_url(Metadata::callback(),PHP_URL_SCHEME)==='https','https','HTTPS is required for browser transactions.');
         $step = 'discovery';
-        $http=self::http(); $d=(new Provider($http))->discover($s); $context=Metadata::context($s); $checked=get_option('ocimd_checked',[]);
+        $http=self::http(); $d=(new Provider($http))->discover($s); $context=Metadata::context($s); $checked=get_option('soca_checked',[]);
         $step = 'publication';
         if (!Keys::ready($context) || ($checked['context']??'')!==$context || ($checked['time']??0)<time()-300 || ($checked['revision']??'')!==$s['revision']) {
-            Metadata::validate($s,$http); update_option('ocimd_checked',['time'=>time(),'context'=>$context,'revision'=>$s['revision']],false);
+            Metadata::validate($s,$http); update_option('soca_checked',['time'=>time(),'context'=>$context,'revision'=>$s['revision']],false);
         }
         $step = 'transaction';
         $keys=Keys::get(); $state=Support::random(); $nonce=Support::random(); $verifier=Support::random();
@@ -162,17 +160,26 @@ final class Plugin {
             'state'=>$state,'nonce'=>$nonce,'code_challenge'=>Support::b64(hash('sha256',$verifier,true)),'code_challenge_method'=>'S256'];
         if ($tx['reauth']) { $params['prompt']='login'; $params['max_age']='0'; }
         nocache_headers(); header('Referrer-Policy: no-referrer');
-        // Discovery has pinned and validated this HTTPS destination. wp_safe_redirect is for local destinations only.
-        wp_redirect(Support::query($d['authorization_endpoint'],$params),302,'SOCA'); exit;
+        // Permit only this validated authorization host for this redirect.
+        $authorizationHost = (string) wp_parse_url($d['authorization_endpoint'], PHP_URL_HOST);
+        $allowAuthorizationHost = static function (array $hosts, string $redirectHost) use ($authorizationHost): array {
+            if ($redirectHost === $authorizationHost) { $hosts[] = $authorizationHost; }
+            return $hosts;
+        };
+        add_filter('allowed_redirect_hosts', $allowAuthorizationHost, 10, 2);
+        try { $redirected = wp_safe_redirect(Support::query($d['authorization_endpoint'],$params), 302, 'SOCA'); }
+        finally { remove_filter('allowed_redirect_hosts', $allowAuthorizationHost, 10); }
+        Support::need($redirected, 'redirect', 'Unable to start the provider login.');
+        exit;
     }
     public static function callback(): void {
         nocache_headers(); header('Referrer-Policy: no-referrer'); header('X-Content-Type-Options: nosniff');
         $ref = bin2hex(random_bytes(6)); $flow = 'login'; $step = 'request';
         try {
-            Support::need(($_SERVER['REQUEST_METHOD']??'')==='GET','method','Only query response mode is supported.');
+            Support::need(Support::serverString('REQUEST_METHOD')==='GET','method','Only query response mode is supported.');
             // PHP collapses duplicate query keys; reject them before reading the parsed request.
-            $queryString = $_SERVER['QUERY_STRING'] ?? '';
-            Support::need(is_string($queryString) && strlen($queryString) <= 16384, 'callback_query', 'Callback query is too long.');
+            $queryString = Support::serverString('QUERY_STRING');
+            Support::need(strlen($queryString) <= 16384, 'callback_query', 'Callback query is too long.');
             $names=[]; foreach (explode('&',$queryString) as $pair) { $name=urldecode(explode('=',$pair,2)[0]); Support::need(!in_array($name,$names,true),'duplicate_parameter','Duplicate callback parameter.'); $names[]=$name; }
             $step = 'transaction';
             $state=Support::scalar(wp_unslash($_GET),'state',100);
@@ -198,7 +205,7 @@ final class Plugin {
                 $step = 'access_policy';
                 Support::need(current_user_can('manage_options'),'authorization','Administrator access required.');
                 [$allowed,$reason]=Policy::test($s,is_string($claims['email']??null)?$claims['email']:'',($claims['email_verified']??false)===true);
-                set_transient('ocimd_test_' . get_current_user_id(),['time'=>time(),'policy'=>$allowed,'message'=>$reason],600);
+                set_transient('soca_test_' . get_current_user_id(),['time'=>time(),'policy'=>$allowed,'message'=>$reason],600);
                 Support::audit('test_login_verified',get_current_user_id(),['flow'=>$flow,'ref'=>$ref]);
                 wp_safe_redirect(admin_url('options-general.php?page=simple-oauth-cimd-access&tested=1')); exit;
             }

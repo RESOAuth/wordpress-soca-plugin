@@ -1,10 +1,10 @@
 <?php
-namespace OCIMD;
-use OCIMD\Vendor\JWT\{JWT,JWK};
+namespace SOCA;
+use SOCA\Vendor\JWT\{JWT,JWK};
 final class Provider {
     public function __construct(private Http $http) {}
     public function discover(array $s, bool $force = false): array {
-        $cache = 'ocimd_d_' . hash('sha256', $s['issuer']); $doc = $force ? false : get_transient($cache);
+        $cache = 'soca_d_' . hash('sha256', $s['issuer']); $doc = $force ? false : get_transient($cache);
         if (!is_array($doc)) {
             $r = $this->http->request(rtrim($s['issuer'], '/') . '/.well-known/openid-configuration');
             $doc = $r['json']; self::validateDiscovery($s, $doc);
@@ -36,12 +36,12 @@ final class Provider {
         }
     }
     private function jwks(array $d, bool $refresh = false): array {
-        $id = hash('sha256', $d['issuer'] . '|' . $d['jwks_uri']); $cache = 'ocimd_j_' . $id;
+        $id = hash('sha256', $d['issuer'] . '|' . $d['jwks_uri']); $cache = 'soca_j_' . $id;
         if (!$refresh) { $hit = get_transient($cache); if (is_array($hit)) { return $hit; } }
         if ($refresh) {
             $allowed = Store::locked('refresh/' . $id, static function () use ($id) {
-                if (get_transient('ocimd_r_' . $id)) { return false; }
-                set_transient('ocimd_r_' . $id, 1, 60); return true;
+                if (get_transient('soca_r_' . $id)) { return false; }
+                set_transient('soca_r_' . $id, 1, 60); return true;
             });
             Support::need($allowed, 'jwks_refresh', 'Provider key refresh is temporarily rate limited; retry in a minute.');
         }
@@ -83,7 +83,7 @@ final class Provider {
                 try { JWT::$leeway = 60; JWT::$timestamp = null; JWT::decode($jwt, $key); }
                 finally { JWT::$leeway = $oldLeeway; JWT::$timestamp = $oldTimestamp; }
                 $verified = true; break;
-            } catch (\OCIMD\Vendor\JWT\SignatureInvalidException $e) {
+            } catch (\SOCA\Vendor\JWT\SignatureInvalidException $e) {
                 if ($attempt) { throw new Failure('signature', 'Invalid ID token signature.'); }
             } catch (Failure $e) { if ($e->reason !== 'key_missing' || $attempt) { throw $e; } }
             catch (\Throwable $e) { throw new Failure('jwt', 'ID token cryptographic or time validation failed.'); }

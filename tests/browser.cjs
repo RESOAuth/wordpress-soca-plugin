@@ -4,7 +4,7 @@ const {execFileSync} = require('node:child_process');
 const assert = require('node:assert/strict');
 const base = process.env.SOCA_BASE || 'https://localhost:8443';
 const cli = (...args) => execFileSync(process.env.CONTAINER_ENGINE || 'podman',['exec','-u','www-data',process.env.SOCA_CONTAINER || 'soca-local_wordpress_1','php','/tmp/wp-cli.phar',...args],{encoding:'utf8'}).trim();
-const scenario = (name) => cli('option','update','ocimd_fixture_scenario',name);
+const scenario = (name) => cli('option','update','soca_fixture_scenario',name);
 let passed = 0;
 const test = async (name, fn) => { await fn(); passed++; console.log('PASS ' + name); };
 (async()=>{
@@ -16,15 +16,13 @@ const test = async (name, fn) => { await fn(); passed++; console.log('PASS ' + n
  page.on('request',r=>{if(r.url().includes('action=soca_callback'))lastCallback=r.url();});
  async function upstream(destination='/') { await page.goto(base+'/wp-admin/admin-post.php?action=soca_start&redirect_to='+encodeURIComponent(base+destination)); await page.waitForLoadState(); }
  async function startRequest() { const userAgent=await page.evaluate(()=>navigator.userAgent); return context.request.get(base+'/wp-admin/admin-post.php?action=soca_start',{maxRedirects:0,headers:{'User-Agent':userAgent}}); }
- await test('WP-CLI uses soca and keeps the previous command as an alias',async()=>{
+ await test('WP-CLI exposes the soca command',async()=>{
    const current=JSON.parse(cli('soca','status'));
-   const legacy=JSON.parse(cli('oauth-cimd','status'));
-   assert.equal(current.active_kid,legacy.active_kid);
-   assert.equal(current.mode,legacy.mode);
+   assert(current.active_kid && current.mode);
  });
  await test('authorization, assertion, PKCE, ID token and WordPress session end to end',async()=>{
    await upstream('/?signed-in=1'); assert.equal(new URL(page.url()).searchParams.get('signed-in'),'1');
-   const cookies=await context.cookies();assert(cookies.some(c=>c.name.startsWith('wordpress_logged_in_')));assert(!cookies.some(c=>c.name.startsWith('__Host-ocimd_')));
+   const cookies=await context.cookies();assert(cookies.some(c=>c.name.startsWith('wordpress_logged_in_')));assert(!cookies.some(c=>c.name.startsWith('__Host-soca_')));
  });
  await test('callback replay fails and presents a matching audit reference',async()=>{await page.goto(lastCallback);const ref=new URL(page.url()).searchParams.get('soca_error');assert.match(ref,/^[a-f0-9]{12}$/);assert(await page.locator('#user_login').isVisible());assert((await page.locator('.message').innerText()).includes(ref));const events=JSON.parse(cli('soca','audit'));assert(events.some(e=>e.event==='login_failed'&&e.ref===ref&&e.step==='transaction'&&e.reason==='state'));});
  await context.clearCookies();
@@ -48,13 +46,12 @@ const test = async (name, fn) => { await fn(); passed++; console.log('PASS ' + n
  });
  await test('a settings change invalidates an in-flight transaction',async()=>{
    const start=await startRequest();assert.equal(start.status(),302);
-   cli('eval',"$s=OCIMD\\Settings::get();$s['revision']=OCIMD\\Support::random();update_option('ocimd_settings',$s,false);");
+   cli('eval',"$s=SOCA\\Settings::get();$s['revision']=SOCA\\Support::random();update_option('soca_settings',$s,false);");
    await page.goto(start.headers().location);assert(new URL(page.url()).searchParams.has('soca_error'));assert(!(await context.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));
  });
  await test('automatic mode and recovery/password flows',async()=>{
-   cli('eval',"$s=OCIMD\\Settings::get();$s['automatic']=true;update_option('ocimd_settings',$s,false);");
+   cli('eval',"$s=SOCA\\Settings::get();$s['automatic']=true;update_option('soca_settings',$s,false);");
    await page.goto(base+'/wp-login.php?soca_local=1');assert(await page.locator('#user_login').isVisible());
-   await page.goto(base+'/wp-login.php?oauth_cimd_local=1');assert(await page.locator('#user_login').isVisible());
    await page.goto(base+'/wp-login.php?action=lostpassword');assert(await page.locator('#wp-submit').isVisible());assert(page.url().includes('lostpassword'));
    await page.goto(base+'/wp-login.php');await page.waitForLoadState();assert(!page.url().includes('wp-login.php'));
  });
@@ -63,7 +60,7 @@ const test = async (name, fn) => { await fn(); passed++; console.log('PASS ' + n
  await context.clearCookies();
  await test('local administrator login, setup UI and accessible bulk input',async()=>{
    await page.goto(base+'/wp-login.php?soca_local=1');await page.locator('#user_login').fill('localadmin');await page.locator('#user_pass').fill('Local-fixture-password-749!');await page.locator('#wp-submit').click();await page.waitForURL('**/wp-admin/**');
-   await page.goto(base+'/wp-admin/options-general.php?page=simple-oauth-cimd-access');assert(await page.getByRole('heading',{name:'SOCA - Simple OAuth CIMD Access',exact:true}).isVisible());
+   await page.goto(base+'/wp-admin/options-general.php?page=simple-oauth-cimd-access');assert(await page.getByRole('heading',{name:'Simple OAuth CIMD Access',exact:true}).isVisible());
    assert(await page.getByText('SOCA is an open-source WordPress single sign-on',{exact:false}).isVisible());
    assert.equal(await page.locator('input[name="trust_email"], input[name="cimd_confirmed"], input[name="inline_ack"]').count(),0);
    const allowAny=page.locator('input[name="unrestricted"]');await allowAny.check();
@@ -87,7 +84,6 @@ const test = async (name, fn) => { await fn(); passed++; console.log('PASS ' + n
    await page.goto(base+'/wp-admin/profile.php');
    assert.equal(await page.getByRole('heading',{name:'SOCA identity'}).count(),0);
    assert.equal(await page.locator('#soca-profile').count(),0);
-   assert.equal(await page.locator('#ocimd-profile').count(),0);
  });
  await test('logout lands on local form even with automatic mode enabled',async()=>{
    const logout=await page.locator('#wp-admin-bar-logout a').getAttribute('href');await page.goto(logout);assert(page.url().includes('soca_local=1'));assert(await page.locator('#user_login').isVisible());

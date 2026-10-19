@@ -1,5 +1,5 @@
 <?php
-namespace OCIMD;
+namespace SOCA;
 /** HTTPS only, no redirects, validated DNS pinned into WordPress' cURL transport. */
 class Http {
     public static function url(string $url): array {
@@ -41,7 +41,7 @@ class Http {
         }
         $args = ['method'=>$form === null ? 'GET' : 'POST', 'headers'=>$headers,
             'timeout'=>12, 'redirection'=>0, 'sslverify'=>true, 'blocking'=>true,
-            'decompress'=>false, 'limit_response_size'=>262145, 'user-agent'=>'SOCA/0.1.1'];
+            'decompress'=>false, 'limit_response_size'=>262145, 'user-agent'=>'SOCA/0.2.0'];
         if ($form !== null) {
             $args['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
             $args['body'] = http_build_query($form, '', '&', PHP_QUERY_RFC3986);

@@ -1,5 +1,5 @@
 <?php
-namespace OCIMD;
+namespace SOCA;
 final class Metadata {
     public static function callback(): string { return add_query_arg('action', 'soca_callback', admin_url('admin-post.php')); }
     public static function url(): string { return add_query_arg('soca_doc', 'client', home_url('/')); }

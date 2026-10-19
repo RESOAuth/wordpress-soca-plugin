@@ -3,7 +3,7 @@ Tags: single sign on, openid connect, oauth, login, authentication
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.1.1
+Stable tag: 0.2.0
 License: AGPL-3.0-only
 License URI: https://www.gnu.org/licenses/agpl-3.0.html
 
@@ -30,7 +30,7 @@ The initial issuer, [auth.resoauth.cloud](https://auth.resoauth.cloud), is the [
 
 During connection checks, login and hourly maintenance while upstream login is enabled, SOCA fetches the selected provider's discovery document and public keys. Login redirects the visitor's browser to that provider and exchanges an authorization code at its token endpoint. The client identifier points the provider to this site's public metadata, including its callback URL and public signing keys. The provider processes the visitor's login and returns identity claims, including verified email, to this WordPress site. It sees the visitor's IP address and browser details during login. Maintenance does not contact external services while upstream login is disabled.
 
-For local development, proxy mode defaults to [RESOAuth Dynamic CIMD](https://dynamic-cimd.resoauth.cloud/), a separate service that serves a Client ID Metadata Document from data encoded in its URL. That URL contains this site's public client metadata and, when inline keys are selected, public signing keys. The service receives the requesting server's IP address during validation, login and enabled-site maintenance; its public URL can also be fetched by the configured identity provider. SOCA sends it no WordPress passwords, private signing keys or returned identity claims. Public production sites default to self-hosted metadata; the proxy template is configurable. The [operator guide](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/GUIDE.md) explains proxy choices. Previously saved proxy settings remain in place until an administrator changes them.
+For local development, proxy mode defaults to [RESOAuth Dynamic CIMD](https://dynamic-cimd.resoauth.cloud/), a separate service that serves a Client ID Metadata Document from data encoded in its URL. That URL contains this site's public client metadata and, when inline keys are selected, public signing keys. The service receives the requesting server's IP address during validation, login and enabled-site maintenance; its public URL can also be fetched by the configured identity provider. SOCA sends it no WordPress passwords, private signing keys or returned identity claims. Public production sites default to self-hosted metadata; the proxy template is configurable. The [operator guide](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/GUIDE.md) explains proxy choices.
 
 SOCA stores encrypted private signing keys and settings on the WordPress site. During login it temporarily stores a one-time transaction and processes the verified email and provider subject to select an account. Its redacted audit omits emails, subjects and tokens. It does not add third-party tracking assets or send usage telemetry. Site owners should describe their chosen identity provider in their own privacy policy.
 
@@ -39,7 +39,7 @@ SOCA stores encrypted private signing keys and settings on the WordPress site. D
 1. Install and activate SOCA on WordPress 6.8+ with PHP 8.1+, OpenSSL and cURL. Use HTTPS and retain a local administrator login.
 2. Open Settings > SOCA. Check the issuer, metadata mode, signing-key publication and email/domain admission rules. Defaults use RESOAuth; public HTTPS sites initially suggest the site's own domain.
 3. Run Validate connection and documents, then Test login with the chosen provider. Confirm a real sign-in and local recovery at /wp-login.php?soca_local=1 before enabling automatic redirection.
-4. For provider-specific settings, migration from OAuth CIMD Auth, key rotation or multisite, follow the [operator guide](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/GUIDE.md).
+4. For provider-specific settings, key rotation or multisite, follow the [operator guide](https://github.com/RESOAuth/wordpress-soca-plugin/blob/main/docs/GUIDE.md).
 
 == Frequently Asked Questions ==
 
@@ -53,9 +53,12 @@ Open /wp-login.php?soca_local=1 to skip automatic navigation, then use your exis
 The current verified provider email must pass the saved admission rules and uniquely match a WordPress account. This includes administrators, so use a provider whose email verification you trust. A changed provider subject does not relink the account, and SOCA does not change its role.
 
 = Is data removed on uninstall? =
-Settings, keys and legacy binding rows are retained by default for recovery. Define SOCA_ERASE_DATA as true before uninstall only when you deliberately want to erase plugin data. WordPress users are never deleted by uninstall.
+Settings and encrypted keys are retained by default for recovery. Define SOCA_ERASE_DATA as true before uninstall to remove persistent settings, signing keys and audit data. Short-lived transients expire through WordPress. WordPress users are never deleted by uninstall.
 
 == Changelog ==
+
+= 0.2.0 =
+Standardize SOCA naming and replace the custom transaction table with encrypted WordPress transients. Use WordPress user APIs for account lookup and safe redirects for authorization.
 
 = 0.1.1 =
 Prepare the directory submission against the current WordPress guidelines: ship a lean installable ZIP, use prepared table identifiers, and tighten callback input handling.

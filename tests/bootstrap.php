@@ -8,8 +8,8 @@ if (!defined('ABSPATH')) {
     function add_option($k,$v,$deprecated='',$autoload=null) { if (isset($GLOBALS['test_options'][$k])) return false; return update_option($k,$v); }
     function delete_option($k) { unset($GLOBALS['test_options'][$k]); }
     function get_transient($k) { $r=$GLOBALS['test_transients'][$k]??null; return $r && $r[1]>time()?$r[0]:false; }
-    function set_transient($k,$v,$t) { $GLOBALS['test_transients'][$k]=[$v,time()+$t]; }
-    function delete_transient($k) { unset($GLOBALS['test_transients'][$k]); }
+    function set_transient($k,$v,$t) { $GLOBALS['test_transients'][$k]=[$v,time()+$t]; return true; }
+    function delete_transient($k) { if (!isset($GLOBALS['test_transients'][$k])) return false; unset($GLOBALS['test_transients'][$k]); return true; }
     function get_current_blog_id() { return 1; }
     function get_current_user_id() { return 1; }
     function wp_salt($scheme) { return 'unit-test-only-key-' . $scheme; }
@@ -32,7 +32,7 @@ if (!defined('ABSPATH')) {
 $plugin = defined('ABSPATH') ? WP_PLUGIN_DIR . '/simple-oauth-cimd-access' : __DIR__ . '/../simple-oauth-cimd-access';
 require_once $plugin . '/vendor/autoload.php';
 foreach (['Support','Policy','Settings','Http','Store','Keys','Metadata','Provider','Identity'] as $name) require_once $plugin . '/includes/' . $name . '.php';
-use OCIMD\{Failure,Http,Settings,Support};
+use SOCA\{Failure,Http,Settings,Support};
 function expect(bool $ok,string $message='assertion failed'): void { if (!$ok) throw new RuntimeException($message); }
 function rejects(callable $fn,?string $reason=null): void {
     try { $fn(); } catch (Failure $e) { if ($reason!==null) expect($e->reason===$reason,'Expected ' . $reason . ', got ' . $e->reason . ': ' . $e->getMessage()); return; }
@@ -54,5 +54,5 @@ function discovery(): array {
         'id_token_signing_alg_values_supported'=>['ES256','RS256'],'scopes_supported'=>['openid','email','profile'],'client_id_metadata_document_supported'=>true,'authorization_response_iss_parameter_supported'=>true];
 }
 function settings(): array { $s=Settings::defaults(); $s['issuer']='https://provider.company.com'; return $s; }
-function transaction(): array { return ['settings'=>settings(),'discovery'=>discovery(),'client'=>'https://client.company.com/client.json','nonce'=>'test-nonce','started'=>time(),'reauth'=>false,'callback'=>'https://client.company.com/callback','verifier'=>Support::random(),'kid'=>OCIMD\Keys::get()['active']]; }
+function transaction(): array { return ['settings'=>settings(),'discovery'=>discovery(),'client'=>'https://client.company.com/client.json','nonce'=>'test-nonce','started'=>time(),'reauth'=>false,'callback'=>'https://client.company.com/callback','verifier'=>Support::random(),'kid'=>SOCA\Keys::get()['active']]; }
 function claims(array $tx): array { return ['iss'=>$tx['settings']['issuer'],'sub'=>'subject-1','aud'=>$tx['client'],'nonce'=>$tx['nonce'],'iat'=>time(),'exp'=>time()+300,'email'=>'user@company.com','email_verified'=>true]; }

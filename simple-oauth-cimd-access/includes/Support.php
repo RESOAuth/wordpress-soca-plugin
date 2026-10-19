@@ -1,5 +1,5 @@
 <?php
-namespace OCIMD;
+namespace SOCA;
 
 final class Failure extends \RuntimeException {
     public function __construct(public string $reason, string $message, public array $diagnostics = []) { parent::__construct($message); }
@@ -7,6 +7,11 @@ final class Failure extends \RuntimeException {
 final class Support {
     public static function need(bool $ok, string $code, string $message): void {
         if (!$ok) { throw new Failure($code, $message); } // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exceptions are not HTML output.
+    }
+    /** WordPress slashes $_SERVER during bootstrap; callers validate each field for its use. */
+    public static function serverString(string $key): string {
+        $value = wp_unslash($_SERVER[$key] ?? ''); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Callers validate fixed fields or hash opaque values.
+        return is_string($value) ? $value : '';
     }
     public static function b64(string $s): string { return rtrim(strtr(base64_encode($s), '+/', '-_'), '='); }
     public static function unb64(string $s): string {
@@ -61,7 +66,7 @@ final class Support {
         // Only locally chosen codes and random references. Never store claims, emails,
         // subjects, URLs, tokens, upstream messages or IP addresses.
         if (!preg_match('/^[a-z_]{1,48}$/D', $event)) { $event = 'internal_error'; }
-        $log = get_option('ocimd_audit', []);
+        $log = get_option('soca_audit', []);
         if (!is_array($log)) { $log = []; }
         $entry = ['time'=>gmdate('c'), 'event'=>$event, 'user'=>$user];
         foreach (['flow','step','reason'] as $key) {
@@ -72,6 +77,6 @@ final class Support {
         if (isset($context['http_status']) && is_int($context['http_status']) && $context['http_status'] >= 100 && $context['http_status'] <= 599) { $entry['http_status'] = $context['http_status']; }
         if (isset($context['curl_errno']) && is_int($context['curl_errno']) && $context['curl_errno'] >= 1 && $context['curl_errno'] <= 99) { $entry['curl_errno'] = $context['curl_errno']; }
         $log[] = $entry;
-        update_option('ocimd_audit', array_slice($log, -100), false);
+        update_option('soca_audit', array_slice($log, -100), false);
     }
 }
