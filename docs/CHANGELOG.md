@@ -1,5 +1,12 @@
 # Release history
 
+## 0.1.1
+
+- Reviewed the WordPress.org submission guidance and trimmed development documentation and evidence from the installable ZIP; the source archive retains them.
+- Prepared database table identifiers with WordPress `%i` placeholders and tightened callback query and authorization-code validation.
+- Unslashed query values at WordPress request boundaries while preserving exact OAuth values for protocol checks.
+- Kept scheduled maintenance local while upstream login is disabled and clarified when enabled sites contact the configured provider and metadata proxy.
+
 ## 0.1.0
 
 - Prepared the plugin header, WordPress.org listing, author and package metadata for the first directory submission.

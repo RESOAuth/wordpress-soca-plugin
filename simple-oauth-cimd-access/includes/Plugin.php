@@ -9,11 +9,12 @@ final class Plugin {
             add_action('admin_post_nopriv_' . $action, [self::class,$method]);
         }
         // The button helper escapes its URL and label before returning HTML.
-        add_action('login_form', static function () { echo self::button(Support::scalar($_GET, 'redirect_to')); }); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        add_action('login_form', static function () { echo self::button(Support::scalar(wp_unslash($_GET), 'redirect_to')); }); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- button() escapes its markup.
         add_action('login_init', [self::class,'automatic']);
         add_filter('login_message', static function ($message) {
             if (isset($_GET['soca_error']) || isset($_GET['oauth_cimd_error'])) {
-                $ref = is_string($_GET['soca_error'] ?? null) && preg_match('/^[a-f0-9]{12}$/D', $_GET['soca_error']) ? $_GET['soca_error'] : '';
+                $errorRef = wp_unslash($_GET['soca_error'] ?? '');
+                $ref = is_string($errorRef) && preg_match('/^[a-f0-9]{12}$/D', $errorRef) ? $errorRef : '';
                 $message .= '<p class="message">SOCA login did not complete. You can retry or use your local account. An administrator can review the redacted audit events.' . ($ref ? ' Reference: <code>' . esc_html($ref) . '</code>.' : '') . '</p>';
             }
             return $message;
@@ -61,14 +62,14 @@ final class Plugin {
     }
     public static function documents(): void {
         if (!isset($_GET['soca_doc'])) { return; }
-        if (!in_array($_SERVER['REQUEST_METHOD'], ['GET','HEAD'], true)) { status_header(405); exit; }
+        if (!in_array($_SERVER['REQUEST_METHOD'] ?? '', ['GET','HEAD'], true)) { status_header(405); exit; }
         try {
-            $kind = Support::scalar($_GET,'soca_doc');
+            $kind = Support::scalar(wp_unslash($_GET),'soca_doc');
             Support::need(in_array($kind,['client','jwks'],true), 'document', 'Unknown public document.');
             $doc = $kind === 'jwks' ? Keys::jwks() : Metadata::document(Settings::get(), true);
             header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: public, max-age=300, must-revalidate');
             header('X-Content-Type-Options: nosniff'); header('Access-Control-Allow-Origin: *');
-            if ($_SERVER['REQUEST_METHOD'] !== 'HEAD') { echo Support::json($doc); } exit; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON response, not HTML.
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'HEAD') { echo Support::json($doc); } exit; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON response, not HTML.
         } catch (\Throwable $e) { status_header(503); header('Cache-Control: no-store'); header('Content-Type: application/json'); echo '{"error":"metadata_unavailable"}'; exit; }
     }
     public static function button(string $destination = ''): string {
@@ -86,7 +87,7 @@ final class Plugin {
         if (!$s['enabled'] || !$s['automatic'] || Settings::disabled() || is_user_logged_in() || ($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') { return; }
         // A narrow allowlist preserves recovery, reset, logout, interim, reauth and plugin-specific flows.
         if (array_diff(array_keys($_GET), ['redirect_to','action']) || (isset($_GET['action']) && $_GET['action'] !== 'login')) { return; }
-        wp_safe_redirect(Support::query(admin_url('admin-post.php'), ['action'=>'soca_start','redirect_to'=>Support::destination(Support::scalar($_GET,'redirect_to'))])); exit;
+        wp_safe_redirect(Support::query(admin_url('admin-post.php'), ['action'=>'soca_start','redirect_to'=>Support::destination(Support::scalar(wp_unslash($_GET),'redirect_to'))])); exit;
     }
     private static function rate(string $purpose, int $limit): void {
         $key = 'ocimd_rate_' . hash_hmac('sha256', $purpose . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'), wp_salt('nonce'));
@@ -106,7 +107,12 @@ final class Plugin {
     }
     public static function maintenance(): void {
         try {
-            Store::clean(); $s=Settings::get(); $context=Metadata::validate($s,self::http()); Keys::rotate($s,$context);
+            Store::clean(); $s=Settings::get();
+            if (!$s['enabled'] || Settings::disabled()) {
+                update_option('ocimd_maintenance_status',['time'=>time(),'ok'=>true,'code'=>'login_disabled'],false);
+                return;
+            }
+            $context=Metadata::validate($s,self::http()); Keys::rotate($s,$context);
             update_option('ocimd_maintenance_status',['time'=>time(),'ok'=>true,'code'=>'publication_checked'],false);
         } catch (\Throwable $e) { update_option('ocimd_maintenance_status',['time'=>time(),'ok'=>false,'code'=>$e instanceof Failure?$e->reason:'internal_error'],false); Support::audit('maintenance_failed'); }
     }
@@ -122,12 +128,12 @@ final class Plugin {
         $ref = bin2hex(random_bytes(6)); $flow = 'login'; $step = 'request';
         try {
             Support::need(($_SERVER['REQUEST_METHOD']??'')==='GET','method','Login must start with GET.');
-            $purpose=Support::scalar($_GET,'purpose',20) ?: 'login';
+            $purpose=Support::scalar(wp_unslash($_GET),'purpose',20) ?: 'login';
             Support::need(in_array($purpose,['login','test'],true),'purpose','Invalid login purpose.');
             $flow = $purpose;
             if ($purpose==='test') {
                 Support::need(current_user_can('manage_options'),'authorization','Administrator access required.');
-                Support::need((bool) wp_verify_nonce(Support::scalar($_GET,'_wpnonce',100), 'ocimd_test'), 'nonce', 'Invalid test-login nonce.');
+                Support::need((bool) wp_verify_nonce(Support::scalar(wp_unslash($_GET),'_wpnonce',100), 'ocimd_test'), 'nonce', 'Invalid test-login nonce.');
             }
             self::begin($purpose,$ref,$step);
         } catch (\Throwable $e) { self::fail($e,$flow,$step,$ref); }
@@ -148,7 +154,7 @@ final class Plugin {
         $tx=['settings'=>$s,'discovery'=>$d,'client'=>Metadata::clientId($s),'callback'=>Metadata::callback(),'kid'=>$keys['active'],
             'nonce'=>$nonce,'verifier'=>$verifier,'user_agent'=>self::userAgentHash(),'started'=>time(),'purpose'=>$purpose,'reauth'=>$purpose!=='login',
             'user'=>$purpose==='login'?0:get_current_user_id(),'session'=>$purpose==='login'?'':hash('sha256',wp_get_session_token()),
-            'destination'=>Support::destination(Support::scalar($_GET,'redirect_to')),'audit_ref'=>$ref];
+            'destination'=>Support::destination(Support::scalar(wp_unslash($_GET),'redirect_to')),'audit_ref'=>$ref];
         Store::createTransaction($state,$tx);
         Support::audit('login_started', $purpose==='test' ? get_current_user_id() : 0, ['flow'=>$purpose,'step'=>'redirect','ref'=>$ref]);
         $step = 'redirect';
@@ -165,9 +171,11 @@ final class Plugin {
         try {
             Support::need(($_SERVER['REQUEST_METHOD']??'')==='GET','method','Only query response mode is supported.');
             // PHP collapses duplicate query keys; reject them before reading the parsed request.
-            $names=[]; foreach (explode('&',$_SERVER['QUERY_STRING']??'') as $pair) { $name=urldecode(explode('=',$pair,2)[0]); Support::need(!in_array($name,$names,true),'duplicate_parameter','Duplicate callback parameter.'); $names[]=$name; }
+            $queryString = $_SERVER['QUERY_STRING'] ?? '';
+            Support::need(is_string($queryString) && strlen($queryString) <= 16384, 'callback_query', 'Callback query is too long.');
+            $names=[]; foreach (explode('&',$queryString) as $pair) { $name=urldecode(explode('=',$pair,2)[0]); Support::need(!in_array($name,$names,true),'duplicate_parameter','Duplicate callback parameter.'); $names[]=$name; }
             $step = 'transaction';
-            $state=Support::scalar($_GET,'state',100);
+            $state=Support::scalar(wp_unslash($_GET),'state',100);
             $tx=Store::consumeTransaction($state,self::userAgentHash());
             $ref = is_string($tx['audit_ref'] ?? null) && preg_match('/^[a-f0-9]{12}$/D', $tx['audit_ref']) ? $tx['audit_ref'] : $ref;
             $flow = ($tx['purpose'] ?? '') === 'test' ? 'test' : 'login';
@@ -176,10 +184,10 @@ final class Plugin {
             $s=Settings::get();
             Support::need(!Settings::disabled() && $s['revision']===$tx['settings']['revision'] && ($s['enabled'] || $tx['purpose']!=='login'),'configuration_changed','Configuration changed during login. Start again.');
             $step = 'authorization_response';
-            $iss=Support::scalar($_GET,'iss');
+            $iss=Support::scalar(wp_unslash($_GET),'iss');
             Support::need(($iss==='' && empty($tx['discovery']['authorization_response_iss_parameter_supported'])) || $iss===$tx['settings']['issuer'],'response_issuer','Authorization response issuer mismatch or missing.');
             Support::need(!isset($_GET['error']),'provider_denied','Provider cancelled or denied the request.');
-            $code=Support::scalar($_GET,'code'); Support::need($code!=='','code','Authorization code is missing.');
+            $code=Support::authorizationCode(Support::scalar(wp_unslash($_GET),'code'));
             if ($tx['purpose']!=='login') {
                 Support::need(get_current_user_id()===$tx['user'] && hash_equals($tx['session'],hash('sha256',wp_get_session_token())),'session','The original authenticated local session is required.');
             }

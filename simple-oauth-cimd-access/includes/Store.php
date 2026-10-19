@@ -56,18 +56,18 @@ final class Store {
         global $wpdb;
         Support::need((bool) preg_match('/^[A-Za-z0-9_-]{43}$/D', $state), 'state', 'Invalid or expired login state.');
         $id = hash('sha256', $state); $table = $wpdb->prefix . 'ocimd_transactions';
-        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%s", $id), ARRAY_A);
+        $row = $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE id=%s', $table, $id), ARRAY_A);
         Support::need(is_array($row) && (int)$row['expires'] >= time(), 'state', 'Invalid or expired login state.');
         $tx = self::open($row['payload']);
         if (!is_string($tx['user_agent'] ?? null) || !hash_equals($tx['user_agent'], $userAgentHash)) {
             throw new Failure('user_agent_mismatch', 'The browser User-Agent changed during login.', ['ref'=>$tx['audit_ref'] ?? '', 'flow'=>$tx['purpose'] ?? '']); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Diagnostic values are validated/redacted before display.
         }
         // One concurrent callback wins even with a persistent WordPress object cache.
-        $deleted = $wpdb->query($wpdb->prepare("DELETE FROM $table WHERE id=%s AND expires >= %d", $id, time()));
+        $deleted = $wpdb->query($wpdb->prepare('DELETE FROM %i WHERE id=%s AND expires >= %d', $table, $id, time()));
         Support::need($deleted === 1, 'replay', 'Login transaction has already been used.');
         return $tx;
     }
     public static function clean(): void {
-        global $wpdb; $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->prefix}ocimd_transactions WHERE expires < %d", time()));
+        global $wpdb; $wpdb->query($wpdb->prepare('DELETE FROM %i WHERE expires < %d', $wpdb->prefix . 'ocimd_transactions', time()));
     }
 }

@@ -17,6 +17,7 @@ if (!defined('ABSPATH')) {
     function admin_url($p='') { return 'https://www.client.company.com/wp-admin/' . $p; }
     function wp_parse_url($v,$component=-1) { return parse_url($v,$component); }
     function wp_strip_all_tags($v) { return trim(strip_tags($v)); }
+    function wp_unslash($v) { return is_array($v) ? array_map('wp_unslash', $v) : stripslashes($v); }
     function get_bloginfo($k) { return 'Test WordPress'; }
     function add_query_arg($a,$b,$c=null) {
         if (is_array($a)) { $args=$a; $url=$b; } else { $args=[$a=>$b]; $url=$c; }

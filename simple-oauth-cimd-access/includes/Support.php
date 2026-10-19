@@ -31,6 +31,10 @@ final class Support {
         self::need(is_string($v) && strlen($v) <= $limit, 'input', 'Malformed request parameter.');
         return $v;
     }
+    public static function authorizationCode(string $code): string {
+        self::need($code !== '' && (bool) preg_match('/^[\x21-\x7e]+$/D', $code), 'code', 'Authorization code is missing or malformed.');
+        return $code;
+    }
     public static function localHost(string $host): bool {
         $h = strtolower(trim($host, '[]'));
         return filter_var($h, FILTER_VALIDATE_IP) !== false || !str_contains($h, '.') ||

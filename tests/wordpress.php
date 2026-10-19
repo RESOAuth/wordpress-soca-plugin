@@ -13,6 +13,24 @@ try {
         try { $local=Settings::defaults(); expect(!$local['enabled'] && $local['mode']==='proxy' && $local['key_mode']==='inline' && $local['allow_domains']===[] && !$local['unrestricted'] && $local['proxy']==='https://dynamic-cimd.resoauth.cloud/cimd/%s'); }
         finally { update_option('home',$home); }
     });
+    test('disabled maintenance cleans locally without contacting a provider',function()use($before){
+        $previousStatus=get_option('ocimd_maintenance_status',false);
+        $called=false;
+        $observeHttp=static function($http)use(&$called){$called=true;return $http;};
+        add_filter('soca_http',$observeHttp);
+        try {
+            $disabled=$before; $disabled['enabled']=false;
+            update_option('ocimd_settings',$disabled,false);
+            Plugin::maintenance();
+            $status=get_option('ocimd_maintenance_status');
+            expect(!$called && $status['ok']===true && $status['code']==='login_disabled');
+        } finally {
+            remove_filter('soca_http',$observeHttp);
+            update_option('ocimd_settings',$before,false);
+            if($previousStatus===false){delete_option('ocimd_maintenance_status');}
+            else{update_option('ocimd_maintenance_status',$previousStatus,false);}
+        }
+    });
     test('allow-any save preserves hidden allowlists while deny rules still win',function()use($before){
         $input=$before;
         foreach (['allow_domains','allow_emails','deny_domains','deny_emails'] as $key) { $input[$key]=implode("\n",$before[$key]); }
