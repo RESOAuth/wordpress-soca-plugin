@@ -32,6 +32,8 @@ jobs:
             composer validate --strict
           docker run --rm -v "$PWD:/app" -w /app/tools/security soca-security-php \
             composer install --no-interaction --prefer-dist --no-progress
+          docker run --rm --network none -v "$PWD:/app:ro" -w /app/tools/security soca-security-php \
+            composer check-platform-reqs
       - name: Verify detection fixtures and scan PHP without network access
         run: |
           docker run --rm --network none -v "$PWD:/app:ro" -w /app soca-security-php \
