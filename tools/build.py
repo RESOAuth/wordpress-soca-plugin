@@ -19,7 +19,7 @@ plugin += [(slug+'/composer.json',root/'composer.json')]
 assert not any('/tests/' in name or '/work/' in name or name.endswith('wp-config.php') for name,_ in plugin)
 source=[]
 for folder in [slug,'docs','tools','tests','.github']:
-    source += [('wordpress-simple-oauth-cimd-access/'+str(p.relative_to(root)),p) for p in (root/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts]
+    source += [('wordpress-simple-oauth-cimd-access/'+str(p.relative_to(root)),p) for p in (root/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts and not p.is_relative_to(root/'tools/security/vendor') and not p.is_relative_to(root/'tools/security/.cache')]
 for file in ['README.md','LICENSE','composer.json','composer.lock','docker-compose.yml','.gitignore']:
     source.append(('wordpress-simple-oauth-cimd-access/'+file,root/file))
 manifest=[archive(out/f'{slug}-{version}.zip',plugin),archive(out/f'{slug}-{version}-source.zip',source)]

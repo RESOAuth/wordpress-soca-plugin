@@ -1,0 +1,53 @@
+name: PHP security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '43 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: PHP security (${{ matrix.scanner }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        scanner: [psalm, phpcs]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build PHP scanner environment
+        run: docker build -t soca-security-php tools/security
+      - name: Install locked development tools
+        run: |
+          docker run --rm -v "$PWD:/app" -w /app/tools/security soca-security-php \
+            composer validate --strict
+          docker run --rm -v "$PWD:/app" -w /app/tools/security soca-security-php \
+            composer install --no-interaction --prefer-dist --no-progress
+      - name: Verify detection fixtures and scan PHP without network access
+        run: |
+          docker run --rm --network none -v "$PWD:/app:ro" -w /app soca-security-php \
+            sh tools/security/run.sh "${{ matrix.scanner }}"
+
+  semgrep:
+    name: PHP security (Semgrep CE)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Pull pinned Semgrep CE
+        run: docker build -t soca-security-semgrep tools/security/semgrep
+      - name: Verify rule fixtures and scan PHP without network access
+        run: |
+          docker run --rm --network none -v "$PWD:/src:ro" -w /src soca-security-semgrep \
+            sh tools/security/run.sh semgrep

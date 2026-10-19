@@ -57,3 +57,7 @@ wp-config.php
 node_modules/
 __pycache__/
 *.pyc
+
+# Development-only security scanners; the plugin's bundled vendor stays tracked.
+/tools/security/vendor/
+/tools/security/.cache/

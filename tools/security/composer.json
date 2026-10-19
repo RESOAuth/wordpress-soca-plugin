@@ -1,0 +1,25 @@
+{
+  "name": "resoauth/soca-security-tools",
+  "description": "Development-only PHP security scanners for SOCA",
+  "license": "AGPL-3.0-only",
+  "autoload": {
+    "psr-4": {
+      "SOCA\\Security\\": "./"
+    }
+  },
+  "require": {
+    "php": "^8.3",
+    "humanmade/psalm-plugin-wordpress": "^3.1",
+    "vimeo/psalm": "^6.0",
+    "wp-coding-standards/wpcs": "^3.0"
+  },
+  "config": {
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    },
+    "sort-packages": true,
+    "platform": {
+      "php": "8.3.0"
+    }
+  }
+}

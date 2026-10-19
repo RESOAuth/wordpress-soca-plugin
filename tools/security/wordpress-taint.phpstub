@@ -1,0 +1,65 @@
+<?php
+// Analysis declarations only. Keep input tainted through WordPress wrappers;
+// escaping removes HTML taints only, not SQL, shell, file, header or SSRF taints.
+
+/** @psalm-flow ($value) -> return */
+function wp_unslash($value) {}
+
+/** @psalm-flow ($str) -> return */
+function sanitize_text_field($str) {}
+
+/**
+ * @psalm-flow ($text) -> return
+ * @psalm-taint-escape html
+ * @psalm-taint-escape has_quotes
+ */
+function esc_html($text): string {}
+
+/**
+ * @psalm-flow ($text) -> return
+ * @psalm-taint-escape html
+ * @psalm-taint-escape has_quotes
+ */
+function esc_attr($text): string {}
+
+/**
+ * @psalm-flow ($text) -> return
+ * @psalm-taint-escape html
+ * @psalm-taint-escape has_quotes
+ */
+function esc_textarea($text): string {}
+
+/**
+ * @psalm-flow ($url) -> return
+ * @psalm-taint-specialize
+ * @psalm-taint-escape ($_context is 'display' ? 'html' : null)
+ * @psalm-taint-escape ($_context is 'display' ? 'has_quotes' : null)
+ */
+function esc_url($url, $protocols = null, $_context = 'display'): string {}
+
+/** @psalm-taint-source input */
+function wp_remote_retrieve_body($response): string {}
+
+class wpdb {
+    /**
+     * @psalm-flow ($query, $args) -> return
+     * @psalm-taint-sink sql $query
+     * @psalm-taint-escape sql
+     */
+    public function prepare($query, ...$args): ?string {}
+
+    /** @psalm-taint-sink sql $query */
+    public function query($query) {}
+
+    /** @psalm-taint-sink sql $query */
+    public function get_var($query = null, $x = 0, $y = 0) {}
+
+    /** @psalm-taint-sink sql $query */
+    public function get_row($query = null, $output = OBJECT, $y = 0) {}
+
+    /** @psalm-taint-sink sql $query */
+    public function get_results($query = null, $output = OBJECT) {}
+
+    /** @psalm-taint-sink sql $query */
+    public function get_col($query = null, $x = 0) {}
+}
