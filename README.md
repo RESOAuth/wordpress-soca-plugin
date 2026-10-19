@@ -1,4 +1,4 @@
-# SOCA — Simple OAuth CIMD Access
+# SOCA - Simple OAuth CIMD Access
 
 SOCA adds single sign-on to WordPress through an OpenID Connect provider that supports OAuth Client ID Metadata Documents (CIMD). It is developed by [RESOAuth](https://github.com/RESOAuth), starts with RESOAuth settings, and can be configured for another compatible provider. The plugin uses authorization code with PKCE and a signed client assertion. WordPress remains the application that receives the login; SOCA does not turn it into an authorization server.
 
