@@ -16,9 +16,32 @@ const test = async (name, fn) => { await fn(); passed++; console.log('PASS ' + n
  page.on('request',r=>{if(r.url().includes('action=soca_callback'))lastCallback=r.url();});
  async function upstream(destination='/') { await page.goto(base+'/wp-admin/admin-post.php?action=soca_start&redirect_to='+encodeURIComponent(base+destination)); await page.waitForLoadState(); }
  async function startRequest() { const userAgent=await page.evaluate(()=>navigator.userAgent); return context.request.get(base+'/wp-admin/admin-post.php?action=soca_start',{maxRedirects:0,headers:{'User-Agent':userAgent}}); }
+ async function emergency(value) {
+   if(value)cli('config','set','SOCA_DISABLED','true','--raw');else cli('config','delete','SOCA_DISABLED');
+   // Wait for web workers to observe deployment changes through their PHP opcode cache.
+   for(let attempt=0;attempt<50;attempt++){
+     const r=await context.request.get(base+'/?soca_fixture_status=1');
+     if((await r.json()).disabled===value)return;
+     await page.waitForTimeout(150);
+   }
+   throw new Error('Web workers did not observe emergency configuration');
+ }
  await test('WP-CLI exposes the soca command',async()=>{
    const current=JSON.parse(cli('soca','status'));
    assert(current.active_kid && current.mode);
+ });
+ await test('candidate configuration needs an admitted test login before ordinary SSO',async()=>{
+   const usersBefore=cli('user','list','--field=user_email');
+   const attempt=await context.request.get(base+'/wp-admin/admin-post.php?action=soca_start',{maxRedirects:0});
+   assert.equal(attempt.status(),302);assert(attempt.headers().location.includes('soca_error'));
+   await page.goto(base+'/wp-login.php?soca_local=1');await page.locator('#user_login').fill('localadmin');await page.locator('#user_pass').fill('Local-fixture-password-749!');await page.locator('#wp-submit').click();await page.waitForURL('**/wp-admin/**');
+   const before=(await context.cookies()).find(c=>c.name.startsWith('wordpress_logged_in_')).value;
+   const ticket=cli('soca','test-url','--user=1');await page.goto(ticket);await page.waitForLoadState();
+   assert(page.url().includes('tested=1'));assert.equal((await context.cookies()).find(c=>c.name.startsWith('wordpress_logged_in_')).value,before);
+   assert.equal(JSON.parse(cli('soca','status')).test_login_current,true);
+   await page.goto(ticket);assert(page.url().includes('soca_error'));
+   assert.equal(cli('user','list','--field=user_email'),usersBefore);
+   await context.clearCookies();
  });
  await test('authorization, assertion, PKCE, ID token and WordPress session end to end',async()=>{
    await upstream('/?signed-in=1'); assert.equal(new URL(page.url()).searchParams.get('signed-in'),'1');
@@ -30,24 +53,42 @@ const test = async (name, fn) => { await fn(); passed++; console.log('PASS ' + n
    scenario(mode);await upstream();assert(page.url().includes('soca_local=1'));assert.match(new URL(page.url()).searchParams.get('soca_error'),/^[a-f0-9]{12}$/);assert(!(await context.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));
  });
  scenario('valid');
- await test('a direct callback can finish in another browser and remains single-use',async()=>{
+ await test('a copied callback fails in another browser with an identical User-Agent',async()=>{
    const start=await startRequest();assert.equal(start.status(),302);
    const auth=start.headers().location;const other=await browser.newContext({ignoreHTTPSErrors:true});const stolen=await other.newPage();
-   await stolen.goto(auth);assert(!(new URL(stolen.url()).searchParams.has('soca_error')));assert((await other.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));await other.close();
-   await page.goto(auth);const ref=new URL(page.url()).searchParams.get('soca_error');assert.match(ref,/^[a-f0-9]{12}$/);const events=JSON.parse(cli('soca','audit'));assert(events.some(e=>e.event==='login_failed'&&e.ref===ref&&e.reason==='state'));await context.clearCookies();
+   await stolen.goto(auth);const ref=new URL(stolen.url()).searchParams.get('soca_error');assert.match(ref,/^[a-f0-9]{12}$/);assert(!(await other.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));
+   const events=JSON.parse(cli('soca','audit'));assert(events.some(e=>e.event==='login_failed'&&e.ref===ref&&e.reason==='browser_binding'));await other.close();
+   const txCookies=(await context.cookies()).filter(c=>c.name.startsWith('__Host-soca_tx_'));assert(txCookies.length===1 && txCookies[0].httpOnly && txCookies[0].secure && txCookies[0].sameSite==='Lax');
+   await page.goto(auth);assert(!new URL(page.url()).searchParams.has('soca_error'));await context.clearCookies();
  });
  await test('a changed User-Agent is rejected before consuming the transaction',async()=>{
    const start=await startRequest();assert.equal(start.status(),302);
-   const auth=start.headers().location;const other=await browser.newContext({ignoreHTTPSErrors:true,userAgent:'SOCA-different-browser'});const stolen=await other.newPage();
+   const auth=start.headers().location;const other=await browser.newContext({ignoreHTTPSErrors:true,userAgent:'SOCA-different-browser'});await other.addCookies(await context.cookies());const stolen=await other.newPage();
    await stolen.goto(auth);const ref=new URL(stolen.url()).searchParams.get('soca_error');assert.match(ref,/^[a-f0-9]{12}$/);
    const events=JSON.parse(cli('soca','audit'));assert(events.some(e=>e.event==='login_failed'&&e.ref===ref&&e.reason==='user_agent_mismatch'));
    assert(!(await other.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));await other.close();
    await page.goto(auth);assert(!new URL(page.url()).searchParams.has('soca_error'));await context.clearCookies();
  });
+ await test('parallel tabs retain independent browser bindings',async()=>{
+   const a=await startRequest(),b=await startRequest();assert.equal(a.status(),302);assert.equal(b.status(),302);
+   assert.equal((await context.cookies()).filter(c=>c.name.startsWith('__Host-soca_tx_')).length,2);
+   const second=await context.newPage();await page.goto(a.headers().location);await second.goto(b.headers().location);
+   assert(!page.url().includes('soca_error')&&!second.url().includes('soca_error'));await second.close();await context.clearCookies();
+ });
  await test('a settings change invalidates an in-flight transaction',async()=>{
    const start=await startRequest();assert.equal(start.status(),302);
    cli('eval',"$s=SOCA\\Settings::get();$s['revision']=SOCA\\Support::random();update_option('soca_settings',$s,false);");
    await page.goto(start.headers().location);assert(new URL(page.url()).searchParams.has('soca_error'));assert(!(await context.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));
+ });
+ await test('emergency disable blocks an in-flight login and does not revive it on re-enable',async()=>{
+   const start=await startRequest();assert.equal(start.status(),302);
+   await emergency(true);
+   try{await page.goto(start.headers().location);assert(page.url().includes('soca_error'));assert(!(await context.cookies()).some(c=>c.name.startsWith('wordpress_logged_in_')));}
+   finally{await emergency(false);}
+   assert.equal(JSON.parse(cli('soca','status')).test_login_current,false);
+   await page.goto(start.headers().location);assert(page.url().includes('soca_error'));
+   await page.goto(base+'/wp-login.php?soca_local=1');await page.locator('#user_login').fill('localadmin');await page.locator('#user_pass').fill('Local-fixture-password-749!');await page.locator('#wp-submit').click();await page.waitForURL('**/wp-admin/**');
+   await page.goto(cli('soca','test-url','--user=1'));assert(page.url().includes('tested=1'));await context.clearCookies();
  });
  await test('automatic mode and recovery/password flows',async()=>{
    cli('eval',"$s=SOCA\\Settings::get();$s['automatic']=true;update_option('soca_settings',$s,false);");
@@ -79,6 +120,14 @@ const test = async (name, fn) => { await fn(); passed++; console.log('PASS ' + n
    const before=(await context.cookies()).find(c=>c.name.startsWith('wordpress_logged_in_')).value;
    await page.getByRole('link',{name:'Test login (keeps this admin session)',exact:true}).click();await page.waitForLoadState();
    assert(page.url().includes('tested=1'));assert.equal((await context.cookies()).find(c=>c.name.startsWith('wordpress_logged_in_')).value,before);
+ });
+ await test('emergency disable also blocks an operator test already in flight',async()=>{
+   const ticket=cli('soca','test-url','--user=1');const userAgent=await page.evaluate(()=>navigator.userAgent);
+   const start=await context.request.get(ticket,{maxRedirects:0,headers:{'User-Agent':userAgent}});assert.equal(start.status(),302);
+   await emergency(true);
+   try{await page.goto(start.headers().location);assert(page.url().includes('soca_error'));assert.equal(JSON.parse(cli('soca','status')).enabled,false);}
+   finally{await emergency(false);}
+   await page.goto(cli('soca','test-url','--user=1'));assert(page.url().includes('tested=1'));
  });
  await test('user profile has no separate plugin identity controls',async()=>{
    await page.goto(base+'/wp-admin/profile.php');

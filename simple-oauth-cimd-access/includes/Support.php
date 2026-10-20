@@ -13,6 +13,7 @@ final class Support {
         $value = wp_unslash($_SERVER[$key] ?? ''); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Callers validate fixed fields or hash opaque values.
         return is_string($value) ? $value : '';
     }
+    /** @psalm-taint-specialize */
     public static function b64(string $s): string { return rtrim(strtr(base64_encode($s), '+/', '-_'), '='); }
     public static function unb64(string $s): string {
         self::need((bool) preg_match('/^[A-Za-z0-9_-]+$/D', $s), 'encoding', 'Invalid base64url.');
@@ -68,7 +69,7 @@ final class Support {
         if (!preg_match('/^[a-z_]{1,48}$/D', $event)) { $event = 'internal_error'; }
         $log = get_option('soca_audit', []);
         if (!is_array($log)) { $log = []; }
-        $entry = ['time'=>gmdate('c'), 'event'=>$event, 'user'=>$user];
+        $entry = ['time'=>gmdate('c'), 'event'=>$event, 'user'=>$user, 'actor'=>get_current_user_id()];
         foreach (['flow','step','reason'] as $key) {
             if (isset($context[$key]) && is_string($context[$key]) && preg_match('/^[a-z_]{1,48}$/D', $context[$key])) { $entry[$key] = $context[$key]; }
         }

@@ -38,6 +38,7 @@ add_action('plugins_loaded', static function () {
     }
     add_filter('soca_http',static fn()=>new SOCA_Mock_HTTP());
     add_action('init',static function(){
+        if(isset($_GET['soca_fixture_status'])){\SOCA\Settings::get();wp_send_json(['disabled'=>\SOCA\Settings::disabled()]);}
         if(!isset($_GET['soca_fixture_authorize']))return;
         $record=[];foreach(['client_id','redirect_uri','code_challenge','nonce','state']as$key)$record[$key]=\SOCA\Support::scalar($_GET,$key,16384);
         if(($_GET['code_challenge_method']??'')!=='S256'||($_GET['response_type']??'')!=='code'||($_GET['response_mode']??'')!=='query')wp_die('Invalid fixture request');
