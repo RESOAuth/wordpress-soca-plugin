@@ -42,7 +42,35 @@ test('allow any verified email overrides allowlists but never deny rules',functi
     expect(Policy::entries("Company.com, company.com;other.com\n",false)===['company.com','other.com']);
     foreach (['*.company.com','company.com.','company.com/','@company.com','localhost','127.0.0.1','аpple.com'] as $v) rejects(fn()=>Policy::domain($v));
 });
-test('public HTTPS defaults enable self-hosted login for the exact hostname',function(){ $s=Settings::defaults();expect($s['allow_domains']===['client.company.com'] && $s['mode']==='self' && $s['key_mode']==='uri' && $s['enabled'] && !$s['unrestricted'] && $s['assertion_audience']==='issuer' && $s['button']==='Continue with SSO' && $s['proxy']==='https://dynamic-cimd.resoauth.cloud/cimd/%s'); });
+test('wildcard domain rules respect DNS label boundaries and deny precedence',function(){
+    $s=settings();$s['allow_domains']=['*.example.com'];$s['deny_domains']=['*.blocked.example.com'];
+    expect(Policy::test($s,'a@x.example.com',true)[0]);expect(Policy::test($s,'a@a.b.example.com',true)[0]);
+    expect(!Policy::test($s,'a@example.com',true)[0]);expect(!Policy::test($s,'a@badexample.com',true)[0]);
+    expect(!Policy::test($s,'a@x.blocked.example.com',true)[0]);
+    expect(Policy::entries('*.EXAMPLE.COM example.com',false)===['*.example.com','example.com']);
+    foreach(['*example.com','*.*.example.com','a.*.example.com','*.com','https://example.com','a@example.com','a..example.com']as$rule) rejects(fn()=>Policy::entries($rule,false),'domain');
+    $s['deny_domains']=['*example.com'];rejects(fn()=>Policy::test($s,'a@x.example.com',true),'domain');
+    $s['deny_domains']=[];$s['allow_domains']=['example.com'];expect(!Policy::test($s,'a@x.example.com',true)[0]);
+});
+test('metadata inherits available branding and legal URLs in both modes',function(){
+    update_option('test_icon','https://www.client.company.com/icon.png');update_option('test_privacy','https://www.client.company.com/privacy/');
+    try {
+        foreach(['self','proxy']as$mode){
+            $s=settings();$s['mode']=$mode;$doc=Metadata::document($s);
+            expect($doc['logo_uri']==='https://www.client.company.com/icon.png' && $doc['policy_uri']==='https://www.client.company.com/privacy/' && !isset($doc['tos_uri']));
+            $s['client_name']='Custom site';$s['logo_uri']='https://www.client.company.com/brand.png';$s['tos_uri']='https://www.client.company.com/terms/';
+            $doc=Metadata::document($s);expect($doc['client_name']==='Custom site' && $doc['logo_uri']===$s['logo_uri'] && $doc['tos_uri']===$s['tos_uri']);
+        }
+        update_option('test_icon','http://www.client.company.com/icon.png');expect(!isset(Metadata::template(settings())['logo_uri']));
+    }finally{delete_option('test_icon');delete_option('test_privacy');}
+});
+test('proxy encoding is deterministic, excludes client_id and rejects oversized metadata',function(){
+    $s=settings();$s['mode']='proxy';$s['key_mode']='inline';$id=Metadata::clientId($s);expect(Metadata::clientId($s)===$id);
+    $encoded=substr($id,strlen('https://dynamic-cimd.resoauth.cloud/cimd/'));$payload=Support::object(Support::unb64($encoded));
+    expect(!isset($payload['client_id']) && count($payload['jwks']['keys'])===2);
+    $s['logo_uri']='https://www.client.company.com/'.str_repeat('a',3000);$s['policy_uri']=$s['logo_uri'];$s['tos_uri']=$s['logo_uri'];$s=Settings::validate($s);rejects(fn()=>Metadata::clientId($s),'proxy_size');
+});
+test('public HTTPS defaults require activation before self-hosted login for the exact hostname',function(){ $s=Settings::defaults();expect($s['allow_domains']===['client.company.com'] && $s['mode']==='self' && $s['key_mode']==='uri' && !$s['enabled'] && !$s['unrestricted'] && $s['assertion_audience']==='issuer' && $s['button']==='Continue with SSO' && $s['proxy']==='https://dynamic-cimd.resoauth.cloud/cimd/%s'); });
 test('settings initialize with current names and defaults',function(){
     $s=Settings::get();
     expect($s['assertion_audience']==='issuer' && is_array(get_option('soca_settings')));

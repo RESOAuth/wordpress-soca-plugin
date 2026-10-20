@@ -2,6 +2,7 @@
 // Progressive enhancement: the textarea remains the submitted, server-validated source.
 document.querySelectorAll('.soca-policy').forEach((box) => {
   const source = box.querySelector('textarea');
+  if (source.disabled) return;
   const kind = box.dataset.kind;
   const editor = document.createElement('div');
   const input = document.createElement('input');
@@ -13,7 +14,7 @@ document.querySelectorAll('.soca-policy').forEach((box) => {
   input.setAttribute('aria-describedby', feedback.id);
   const chips = document.createElement('ul'); chips.className = 'soca-chips';
   const domain = (s) => s.length <= 253 && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(s) && !/(^|\.)(localhost|local|test|invalid|example|internal|lan|home|localdomain)$/.test(s) && !s.endsWith('.home.arpa');
-  const valid = (s) => kind === 'domain' ? domain(s) : s.length <= 254 && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+$/.test(s) && domain(s.split('@')[1]);
+  const valid = (s) => kind === 'domain' ? domain(s.startsWith('*.') ? s.slice(2) : s) : s.length <= 254 && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+$/.test(s) && domain(s.split('@')[1]);
   let entries = source.value.split(/[,;\s]+/).filter(Boolean);
   const draw = () => {
     source.value = entries.join('\n'); chips.replaceChildren();
@@ -49,7 +50,7 @@ if (allowAny) {
   const syncAllowLists = () => {
     document.querySelectorAll('.soca-policy[data-policy="allow"]').forEach((box) => {
       box.hidden = allowAny.checked;
-      box.querySelectorAll('input, textarea, button').forEach((control) => { control.disabled = allowAny.checked; });
+      box.querySelectorAll('input, textarea, button').forEach((control) => { if (box.dataset.locked !== '1') control.disabled = allowAny.checked; });
     });
   };
   allowAny.addEventListener('change', syncAllowLists);

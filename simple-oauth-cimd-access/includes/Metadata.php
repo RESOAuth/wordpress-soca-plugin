@@ -11,10 +11,17 @@ final class Metadata {
         Http::url(str_replace('%s', 'e30', $template));
     }
     public static function template(array $s): array {
-        $doc = ['client_name'=>get_bloginfo('name'), 'client_uri'=>home_url('/'),
+        $doc = ['client_name'=>$s['client_name'] ?: wp_strip_all_tags(get_bloginfo('name')), 'client_uri'=>$s['client_uri'] ?: home_url('/'),
             'redirect_uris'=>[self::callback()], 'grant_types'=>['authorization_code'], 'response_types'=>['code'],
             'scope'=>$s['scopes'], 'application_type'=>'web', 'token_endpoint_auth_method'=>'private_key_jwt',
             'token_endpoint_auth_signing_alg'=>'ES256', 'id_token_signed_response_alg'=>$s['id_alg']];
+        $optional = ['logo_uri'=>get_site_icon_url(), 'policy_uri'=>get_privacy_policy_url(), 'tos_uri'=>''];
+        foreach ($optional as $key=>$default) {
+            $url = $s[$key] ?: $default;
+            if ($url === '') { continue; }
+            try { Http::url($url); $doc[$key] = $url; }
+            catch (Failure $e) { Support::need($s[$key] === '', 'metadata_url', 'Metadata overrides require public HTTPS URLs.'); }
+        }
         if ($s['key_mode'] === 'inline') { $doc['jwks'] = Keys::jwks(); }
         else { $doc['jwks_uri'] = $s['jwks_url'] ?: self::jwksUrl(); }
         return $doc;
@@ -22,7 +29,10 @@ final class Metadata {
     public static function clientId(array $s): string {
         if ($s['mode'] === 'self') { return self::url(); }
         self::proxyTemplate($s['proxy']);
-        $url = str_replace('%s', Support::b64(Support::json(self::template($s))), $s['proxy']);
+        $json = Support::json(self::template($s));
+        Support::need(strlen($json) <= 8192, 'proxy_size', 'Proxy metadata exceeds the 8192-byte public JSON limit. Use a stable JWKS URL or reduce metadata.');
+        $url = str_replace('%s', Support::b64($json), $s['proxy']);
+        Support::need(strlen($url) <= 12288, 'proxy_size', 'Proxy client identifier exceeds the 12288-byte URL limit.');
         Http::url($url); return $url;
     }
     public static function document(array $s, bool $self = false): array {

@@ -53,6 +53,8 @@ jobs:
             --admin_email=admin@company.com --skip-email
           docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp plugin activate simple-oauth-cimd-access
           docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp eval-file /tests/wordpress.php
+          docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp eval-file /tests/deployment.php
+          docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp eval-file /tests/emergency.php
           docker compose -p soca-ci --profile tools run -T --rm --no-deps cli wp soca status
       - name: Container logs on failure
         if: failure()
@@ -79,11 +81,11 @@ jobs:
           python3 tools/build.py
           cd dist
           sha256sum -c SHA256SUMS
-          unzip -t simple-oauth-cimd-access-0.2.0.zip
-          unzip -Z1 simple-oauth-cimd-access-0.2.0.zip | grep -Fx 'simple-oauth-cimd-access/simple-oauth-cimd-access.php'
+          unzip -t simple-oauth-cimd-access-0.3.0.zip
+          unzip -Z1 simple-oauth-cimd-access-0.3.0.zip | grep -Fx 'simple-oauth-cimd-access/simple-oauth-cimd-access.php'
       - name: Upload installable plugin ZIP
         uses: actions/upload-artifact@v7
         with:
-          path: dist/simple-oauth-cimd-access-0.2.0.zip
+          path: dist/simple-oauth-cimd-access-0.3.0.zip
           archive: false
           if-no-files-found: error

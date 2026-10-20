@@ -1,5 +1,14 @@
 # Release history
 
+## 0.3.0 (unreleased)
+
+- Bind each ten-minute transaction to its initiating browser using an independent Secure, HttpOnly, SameSite=Lax cookie; retain encrypted WordPress transients and atomic replay checks.
+- Replace email-based account selection with encrypted, unique issuer/subject associations. Add explicit administrator linking/revocation and conservative provisioning rollback. Existing users require approved links.
+- Require an admitted, fresh test login before ordinary SSO becomes available. Bind evidence to candidate configuration and metadata; preserve the operator session and prevent test-side account writes.
+- Add deployment overrides and locks for every supported setting, shared validation, stale form rejection, WP-CLI configuration and operator-bound test URLs. Emergency disable and deactivation invalidate pending flows and activation evidence.
+- Support exact and leading `*.` domain rules, platform branding/privacy defaults, public metadata overrides and explicit proxy payload/URL limits.
+- Publish a per-ID shared requirements review with remaining security, interoperability and operational gaps.
+
 ## 0.2.0
 
 - Standardized the PHP and vendored JWT namespaces, hooks, options, transients and configuration constants under SOCA, and removed pre-release compatibility paths.

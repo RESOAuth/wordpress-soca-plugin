@@ -37,17 +37,24 @@ final class Store {
         Support::need(is_string($plain), 'encryption', 'Unable to unlock signing keys/transaction. Restore the original WordPress salts or configured encryption key.');
         return Support::object($plain);
     }
-    public static function createTransaction(string $state, array $data): void {
+    public static function createTransaction(string $state, array $data, string $browser): void {
+        Support::need((bool) preg_match('/^[A-Za-z0-9_-]{43}$/D', $browser), 'browser_binding', 'Invalid browser binding.');
+        $data['browser'] = hash('sha256', $browser);
+        $data['expires'] = time() + 600;
         $key = 'soca_tx_' . hash('sha256', $state);
         Support::need(set_transient($key, self::seal($data), 600), 'storage', 'Cannot store login transaction.');
     }
-    public static function consumeTransaction(string $state, string $userAgentHash): array {
+    public static function consumeTransaction(string $state, string $userAgentHash, string $browser): array {
         Support::need((bool) preg_match('/^[A-Za-z0-9_-]{43}$/D', $state), 'state', 'Invalid or expired login state.');
         $key = 'soca_tx_' . hash('sha256', $state);
-        return self::locked($key, static function () use ($key, $userAgentHash) {
+        return self::locked($key, static function () use ($key, $userAgentHash, $browser) {
             $sealed = get_transient($key);
             Support::need(is_string($sealed), 'state', 'Invalid or expired login state.');
             $tx = self::open($sealed);
+            Support::need(($tx['expires'] ?? 0) > time(), 'state', 'Invalid or expired login state.');
+            if (!preg_match('/^[A-Za-z0-9_-]{43}$/D', $browser) || !is_string($tx['browser'] ?? null) || !hash_equals($tx['browser'], hash('sha256', $browser))) {
+                throw new Failure('browser_binding', 'The initiating browser cookie is required.', ['ref'=>$tx['audit_ref'] ?? '', 'flow'=>$tx['purpose'] ?? '']); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Diagnostic values are validated and redacted before display.
+            }
             if (!is_string($tx['user_agent'] ?? null) || !hash_equals($tx['user_agent'], $userAgentHash)) {
                 throw new Failure('user_agent_mismatch', 'The browser User-Agent changed during login.', ['ref'=>$tx['audit_ref'] ?? '', 'flow'=>$tx['purpose'] ?? '']); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Diagnostic values are validated/redacted before display.
             }

@@ -6,14 +6,14 @@ SOCA adds single sign-on to WordPress through an OpenID Connect provider that su
 
 - Publishes this site's client metadata and public signing keys through self-hosted URLs or a configurable HTTPS metadata proxy.
 - Signs client assertions with encrypted, rotating P-256 keys and validates the provider's signed ID token.
-- Applies email and domain admission rules to a **verified** provider email, then selects the matching local WordPress account. Optional creation is limited to Subscriber accounts.
+- Applies email and domain admission rules to a **verified** provider email, then selects an account through its approved issuer/subject identity link. Optional creation is limited to Subscriber accounts.
 - Provides a login button, a test-login flow, redacted diagnostics, WP-CLI maintenance commands, and a local-login recovery route.
 
-**Security decision:** A provider that can verify an admitted administrator email can sign in as that administrator. Keep a local administrator login, review the admission rules, and test the provider before enabling automatic redirects. The browser's User-Agent is checked at callback, but it is not proof of the same browser.
+**Upgrade to 0.3.0:** Existing users need administrator-approved issuer/subject links. Email alone no longer selects a local account. Ordinary SSO requires an admitted test login for the current configuration. Keep a working local administrator login during migration; see the [upgrade and configuration guide](docs/GUIDE.md). Callbacks require a short-lived secure browser cookie.
 
 ## Install and configure
 
-Download the `simple-oauth-cimd-access-0.2.0.zip` release asset when published or build it with `python3 tools/build.py`. In WordPress, choose **Plugins → Add Plugin → Upload Plugin**, activate SOCA, then open **Settings → SOCA**. It requires WordPress 6.8+, PHP 8.1+, OpenSSL, cURL, and a public HTTPS site for self-hosted metadata. The installable ZIP contains its runtime dependency; Composer is not needed on the server.
+Download the `simple-oauth-cimd-access-0.3.0.zip` release asset when published or build it with `python3 tools/build.py`. In WordPress, choose **Plugins → Add Plugin → Upload Plugin**, activate SOCA, then open **Settings → SOCA**. It requires WordPress 6.8+, PHP 8.1+, OpenSSL, cURL, and a public HTTPS site for self-hosted metadata. The installable ZIP contains its runtime dependency; Composer is not needed on the server.
 
 1. Keep a working local administrator password and bookmark `/wp-login.php?soca_local=1`.
 2. Review the configured issuer, provider name, client metadata mode, and exact admission rules. Defaults use `https://auth.resoauth.cloud`.
@@ -24,6 +24,7 @@ The initial identity provider is the [RESOAuth hosted Smart Access Gateway](http
 
 ## Documentation and support
 
+- [Shared requirements review and remaining gaps](docs/REQUIREMENTS.md)
 - [Operator guide](docs/GUIDE.md)
 - [Local development and build](docs/DEVELOPMENT.md)
 - [Security and protocol decisions](docs/SECURITY.md)

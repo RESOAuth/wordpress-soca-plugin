@@ -3,7 +3,7 @@
  * Plugin Name: Simple OAuth CIMD Access
  * Plugin URI: https://github.com/RESOAuth/wordpress-soca-plugin
  * Description: Single sign-on for WordPress with OpenID Connect, PKCE and CIMD.
- * Version: 0.2.0
+ * Version: 0.3.0
  * Requires at least: 6.8
  * Requires PHP: 8.1
  * Author: RESOAuth
